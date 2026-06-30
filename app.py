@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+from pypdf import PdfReader
+import re
 
 # -----------------------
 # PAGE CONFIG
@@ -51,10 +53,6 @@ st.markdown("""
         transform: translateY(-5px);
         box-shadow: 0 8px 30px rgba(0,0,0,0.12);
     }
-    .company-card .rank {
-        font-size: 14px;
-        color: #64748b;
-    }
     .company-card .score {
         font-size: 36px;
         font-weight: 700;
@@ -100,16 +98,25 @@ st.markdown("""
         margin: 3px;
     }
     
-    .gold { color: #F59E0B; }
-    .silver { color: #94A3B8; }
-    .bronze { color: #CD7F32; }
-    
     .metric-label {
         display: flex;
         justify-content: space-between;
         font-size: 13px;
         color: #334155;
         padding: 2px 0;
+    }
+    
+    .upload-container {
+        border: 2px dashed #1B5E20;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        background: #f8fafc;
+        margin: 10px 0;
+    }
+    .upload-container:hover {
+        background: #f0fdf4;
+        border-color: #2E7D32;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -231,34 +238,188 @@ with st.sidebar:
     st.caption("Version 10.0 | ESG Benchmarking")
 
 # -----------------------
-# DATA
+# PDF EXTRACTION FUNCTIONS
 # -----------------------
-@st.cache_data
-def get_company_data():
-    data = {
-        "company": ["ExxonMobil", "Saudi Aramco", "BP"],
-        "ghg_emissions": [34.3, 58.0, 34.3],
-        "methane_intensity": [0.04, 0.04, 0.04],
-        "flaring_intensity": [2.5, 6.65, 4.5],
-        "energy_intensity": [180, 164.3, 175],
-        "renewable_capacity": [0.5, 1.28, 1.0],
-        "safety_ltir": [0.02, 0.011, 0.25],
-        "total_recordable_rate": [0.17, 0.028, 0.20],
-        "process_safety_events": [61, 9, 27],
-        "water_consumption": [330, 78.5, 250],
-        "recycling_rate": [40, 69.1, 55],
-        "social_investment": [200, 541, 64],
-        "female_representation": [28, 8.2, 35],
-        "rnd_spend": [1200, 1451, 900],
-        "upstream_carbon_intensity": [9.5, 10.0, 8.5],
-        "emissions_reduction": [25, 0, 37],
-        "biodiversity_protection": [85, 96.5, 80],
-        "employees": [61000, 76664, 93700],
-        "gas_production": [10.0, 11.4, 9.0],
-        "oil_production": [4.5, 10.7, 3.5]
-    }
-    return pd.DataFrame(data)
+def extract_text_from_pdf(file):
+    """استخراج النص من ملف PDF"""
+    if file is None:
+        return ""
+    try:
+        reader = PdfReader(file)
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        return text
+    except Exception as e:
+        return ""
 
+def extract_esg_metrics(text, company_name, default_data):
+    """استخراج مؤشرات ESG من النص أو استخدام القيم الافتراضية"""
+    if not text:
+        return default_data
+    
+    def find_value(pattern, text, default):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1).replace(',', ''))
+            except:
+                return default
+        return default
+    
+    # Environmental Metrics
+    ghg = find_value(r'GHG\s*emissions?.*?(\d+(?:\.\d+)?)\s*(?:million|M)', text, default_data['ghg_emissions'])
+    if ghg == 0:
+        ghg = find_value(r'(\d+(?:\.\d+)?)\s*(?:million|M)\s*(?:tons?)?\s*(?:CO2|GHG)', text, default_data['ghg_emissions'])
+    
+    methane = find_value(r'methane\s*intensity.*?(\d+(?:\.\d+)?)\s*%', text, default_data['methane_intensity'])
+    flaring = find_value(r'flaring\s*intensity.*?(\d+(?:\.\d+)?)', text, default_data['flaring_intensity'])
+    renewable = find_value(r'renewable\s*capacity.*?(\d+(?:\.\d+)?)\s*(?:GW|gigawatt)', text, default_data['renewable_capacity'])
+    water = find_value(r'water\s*(?:consumption|withdrawal).*?(\d+(?:\.\d+)?)\s*(?:million|M)', text, default_data['water_consumption'])
+    recycling = find_value(r'recycling\s*rate.*?(\d+(?:\.\d+)?)\s*%', text, default_data['recycling_rate'])
+    carbon_intensity = find_value(r'carbon\s*intensity.*?(\d+(?:\.\d+)?)\s*(?:kg|CO2e)', text, default_data['upstream_carbon_intensity'])
+    reduction = find_value(r'(?:emissions?|GHG)\s*reduction.*?(\d+(?:\.\d+)?)\s*%', text, default_data['emissions_reduction'])
+    biodiversity = find_value(r'biodiversity.*?(\d+(?:\.\d+)?)\s*%', text, default_data['biodiversity_protection'])
+    
+    # Social Metrics
+    ltir = find_value(r'LTIR.*?(\d+(?:\.\d+)?)', text, default_data['safety_ltir'])
+    trir = find_value(r'(?:total|recordable).*?(\d+(?:\.\d+)?)', text, default_data['total_recordable_rate'])
+    safety_events = find_value(r'(?:process\s*safety|Tier\s*1).*?(\d+)', text, default_data['process_safety_events'])
+    investment = find_value(r'social\s*investment.*?(\d+(?:\.\d+)?)\s*(?:million|M)', text, default_data['social_investment'])
+    female = find_value(r'women|female.*?(\d+(?:\.\d+)?)\s*%', text, default_data['female_representation'])
+    employees = find_value(r'employees.*?(\d+(?:,?\d+)*)', text, default_data['employees'])
+    
+    # Governance Metrics
+    rnd = find_value(r'R.?D\s*spend.*?(\d+(?:\.\d+)?)\s*(?:million|M)', text, default_data['rnd_spend'])
+    energy_intensity = find_value(r'energy\s*intensity.*?(\d+(?:\.\d+)?)', text, default_data['energy_intensity'])
+    gas_prod = find_value(r'gas\s*production.*?(\d+(?:\.\d+)?)\s*(?:bscfd|bcf)', text, default_data['gas_production'])
+    oil_prod = find_value(r'oil\s*production.*?(\d+(?:\.\d+)?)\s*(?:MMbd|mbd)', text, default_data['oil_production'])
+    
+    return {
+        "company": company_name,
+        "ghg_emissions": ghg,
+        "methane_intensity": methane,
+        "flaring_intensity": flaring,
+        "energy_intensity": energy_intensity,
+        "renewable_capacity": renewable,
+        "safety_ltir": ltir,
+        "total_recordable_rate": trir,
+        "process_safety_events": safety_events,
+        "water_consumption": water,
+        "recycling_rate": recycling,
+        "social_investment": investment,
+        "female_representation": female,
+        "rnd_spend": rnd,
+        "upstream_carbon_intensity": carbon_intensity,
+        "emissions_reduction": reduction,
+        "biodiversity_protection": biodiversity,
+        "employees": employees,
+        "gas_production": gas_prod,
+        "oil_production": oil_prod,
+    }
+
+def process_uploaded_reports(exxon_file, aramco_file, bp_file):
+    """معالجة التقارير المرفوعة"""
+    # بيانات افتراضية لكل شركة
+    default_exxon = {
+        "company": "ExxonMobil",
+        "ghg_emissions": 34.3,
+        "methane_intensity": 0.04,
+        "flaring_intensity": 2.5,
+        "energy_intensity": 180,
+        "renewable_capacity": 0.5,
+        "safety_ltir": 0.02,
+        "total_recordable_rate": 0.17,
+        "process_safety_events": 61,
+        "water_consumption": 330,
+        "recycling_rate": 40,
+        "social_investment": 200,
+        "female_representation": 28,
+        "rnd_spend": 1200,
+        "upstream_carbon_intensity": 9.5,
+        "emissions_reduction": 25,
+        "biodiversity_protection": 85,
+        "employees": 61000,
+        "gas_production": 10.0,
+        "oil_production": 4.5
+    }
+    
+    default_aramco = {
+        "company": "Saudi Aramco",
+        "ghg_emissions": 58.0,
+        "methane_intensity": 0.04,
+        "flaring_intensity": 6.65,
+        "energy_intensity": 164.3,
+        "renewable_capacity": 1.28,
+        "safety_ltir": 0.011,
+        "total_recordable_rate": 0.028,
+        "process_safety_events": 9,
+        "water_consumption": 78.5,
+        "recycling_rate": 69.1,
+        "social_investment": 541,
+        "female_representation": 8.2,
+        "rnd_spend": 1451,
+        "upstream_carbon_intensity": 10.0,
+        "emissions_reduction": 0,
+        "biodiversity_protection": 96.5,
+        "employees": 76664,
+        "gas_production": 11.4,
+        "oil_production": 10.7
+    }
+    
+    default_bp = {
+        "company": "BP",
+        "ghg_emissions": 34.3,
+        "methane_intensity": 0.04,
+        "flaring_intensity": 4.5,
+        "energy_intensity": 175,
+        "renewable_capacity": 1.0,
+        "safety_ltir": 0.25,
+        "total_recordable_rate": 0.20,
+        "process_safety_events": 27,
+        "water_consumption": 250,
+        "recycling_rate": 55,
+        "social_investment": 64,
+        "female_representation": 35,
+        "rnd_spend": 900,
+        "upstream_carbon_intensity": 8.5,
+        "emissions_reduction": 37,
+        "biodiversity_protection": 80,
+        "employees": 93700,
+        "gas_production": 9.0,
+        "oil_production": 3.5
+    }
+    
+    results = []
+    
+    # معالجة ExxonMobil
+    if exxon_file is not None:
+        text = extract_text_from_pdf(exxon_file)
+        results.append(extract_esg_metrics(text, "ExxonMobil", default_exxon))
+    else:
+        results.append(default_exxon)
+    
+    # معالجة Saudi Aramco
+    if aramco_file is not None:
+        text = extract_text_from_pdf(aramco_file)
+        results.append(extract_esg_metrics(text, "Saudi Aramco", default_aramco))
+    else:
+        results.append(default_aramco)
+    
+    # معالجة BP
+    if bp_file is not None:
+        text = extract_text_from_pdf(bp_file)
+        results.append(extract_esg_metrics(text, "BP", default_bp))
+    else:
+        results.append(default_bp)
+    
+    return pd.DataFrame(results)
+
+# -----------------------
+# CALCULATE SCORES
+# -----------------------
 def calculate_esg_scores(df):
     df_calc = df.copy()
     
@@ -358,7 +519,7 @@ def calculate_esg_scores(df):
     return df_calc
 
 # -----------------------
-# DISPLAY FUNCTIONS - المحسنة
+# DISPLAY FUNCTIONS
 # -----------------------
 def display_winner_analysis(df_calc):
     winner = df_calc.loc[df_calc['overall_score'].idxmax()]
@@ -404,7 +565,7 @@ def display_winner_analysis(df_calc):
         """, unsafe_allow_html=True)
 
 def display_company_cards(df_calc):
-    """عرض بطاقات الشركات بشكل احترافي - بدون HTML خام"""
+    """عرض بطاقات الشركات بشكل احترافي"""
     st.subheader("📊 Company Rankings")
     df_sorted = df_calc.sort_values('overall_score', ascending=False).reset_index(drop=True)
     
@@ -418,7 +579,6 @@ def display_company_cards(df_calc):
             is_winner = (i == 0)
             border_color = medal_colors[i] if i < 3 else '#475569'
             
-            # بناء البطاقة باستخدام st.markdown مع HTML صحيح
             st.markdown(f"""
                 <div class='company-card' style='border-color: {border_color};'>
                     <div style='display: flex; justify-content: space-between; align-items: center;'>
@@ -474,7 +634,6 @@ def display_charts(df_calc):
     labels = ['🌿 Environmental', '👥 Social', '🏛️ Governance']
     colors = ['#2E7D32', '#1565C0', '#6A1B9A']
     
-    # Radar Chart
     fig_radar = go.Figure()
     for i, company in enumerate(df_calc['company']):
         values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
@@ -494,7 +653,6 @@ def display_charts(df_calc):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
     
-    # Bar Chart
     fig_bar = go.Figure()
     for i, company in enumerate(df_calc['company']):
         values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
@@ -613,7 +771,6 @@ def display_predictive_insights(df_calc, insights):
                 </div>
             """, unsafe_allow_html=True)
     
-    # Smart Insights
     st.markdown("---")
     st.subheader("🧠 Smart Insights")
     for insight in insights:
@@ -626,13 +783,55 @@ def display_predictive_insights(df_calc, insights):
         """, unsafe_allow_html=True)
 
 # -----------------------
-# MAIN APP
+# MAIN APP - UPLOAD SECTION
 # -----------------------
-st.markdown("## 📊 ESG Benchmarking Analysis")
+st.markdown("## 📄 Upload Sustainability Reports")
 
+st.markdown("""
+<div style='background: #f0fdf4; border-radius: 15px; padding: 15px; margin-bottom: 20px; border-left: 4px solid #1B5E20;'>
+    <p style='margin: 0;'><strong>📌 Instructions:</strong> Upload the 3 PDF reports below, then click "Run ESG Analysis"</p>
+</div>
+""", unsafe_allow_html=True)
+
+# 3 أعمدة لرفع الملفات
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown("""
+    <div class='upload-container'>
+        <span style='font-size: 28px;'>🛢️</span>
+        <h4>ExxonMobil</h4>
+        <p style='font-size: 12px; color: #64748b;'>2025 Sustainability Report</p>
+    </div>
+    """, unsafe_allow_html=True)
+    exxon_file = st.file_uploader("Upload ExxonMobil Report", type="pdf", key="exxon_upload", label_visibility="collapsed")
+
+with col2:
+    st.markdown("""
+    <div class='upload-container'>
+        <span style='font-size: 28px;'>🇸🇦</span>
+        <h4>Saudi Aramco</h4>
+        <p style='font-size: 12px; color: #64748b;'>2025 Sustainability Report</p>
+    </div>
+    """, unsafe_allow_html=True)
+    aramco_file = st.file_uploader("Upload Saudi Aramco Report", type="pdf", key="aramco_upload", label_visibility="collapsed")
+
+with col3:
+    st.markdown("""
+    <div class='upload-container'>
+        <span style='font-size: 28px;'>🌊</span>
+        <h4>BP</h4>
+        <p style='font-size: 12px; color: #64748b;'>2025 Sustainability Report</p>
+    </div>
+    """, unsafe_allow_html=True)
+    bp_file = st.file_uploader("Upload BP Report", type="pdf", key="bp_upload", label_visibility="collapsed")
+
+# -----------------------
+# MAIN APP - ANALYSIS BUTTON
+# -----------------------
 if st.button("🚀 Run ESG Analysis", type="primary", use_container_width=True):
     with st.spinner("📊 Analyzing ESG performance of Saudi Aramco, ExxonMobil, and BP..."):
-        df = get_company_data()
+        df = process_uploaded_reports(exxon_file, aramco_file, bp_file)
         df_calc = calculate_esg_scores(df)
         insights = generate_smart_insights(df_calc)
         st.session_state.results = df_calc
