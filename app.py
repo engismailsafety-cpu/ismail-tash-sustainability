@@ -394,21 +394,18 @@ def process_uploaded_reports(exxon_file, aramco_file, bp_file):
     
     results = []
     
-    # معالجة ExxonMobil
     if exxon_file is not None:
         text = extract_text_from_pdf(exxon_file)
         results.append(extract_esg_metrics(text, "ExxonMobil", default_exxon))
     else:
         results.append(default_exxon)
     
-    # معالجة Saudi Aramco
     if aramco_file is not None:
         text = extract_text_from_pdf(aramco_file)
         results.append(extract_esg_metrics(text, "Saudi Aramco", default_aramco))
     else:
         results.append(default_aramco)
     
-    # معالجة BP
     if bp_file is not None:
         text = extract_text_from_pdf(bp_file)
         results.append(extract_esg_metrics(text, "BP", default_bp))
@@ -519,7 +516,7 @@ def calculate_esg_scores(df):
     return df_calc
 
 # -----------------------
-# DISPLAY FUNCTIONS
+# DISPLAY FUNCTIONS - باستخدام مكونات Streamlit
 # -----------------------
 def display_winner_analysis(df_calc):
     winner = df_calc.loc[df_calc['overall_score'].idxmax()]
@@ -565,13 +562,14 @@ def display_winner_analysis(df_calc):
         """, unsafe_allow_html=True)
 
 def display_company_cards(df_calc):
-    """عرض بطاقات الشركات بشكل احترافي"""
+    """عرض بطاقات الشركات باستخدام مكونات Streamlit الأصلية"""
     st.subheader("📊 Company Rankings")
     df_sorted = df_calc.sort_values('overall_score', ascending=False).reset_index(drop=True)
     
-    medal_colors = ['#F59E0B', '#94A3B8', '#CD7F32']
     medal_icons = ['🥇', '🥈', '🥉']
+    medal_colors = ['#F59E0B', '#94A3B8', '#CD7F32']
     
+    # إنشاء أعمدة متساوية
     cols = st.columns(len(df_sorted))
     
     for i, (idx, row) in enumerate(df_sorted.iterrows()):
@@ -579,52 +577,77 @@ def display_company_cards(df_calc):
             is_winner = (i == 0)
             border_color = medal_colors[i] if i < 3 else '#475569'
             
-            st.markdown(f"""
-                <div class='company-card' style='border-color: {border_color};'>
-                    <div style='display: flex; justify-content: space-between; align-items: center;'>
-                        <span style='font-size: 28px;'>{medal_icons[i]}</span>
-                        {'<span class="winner-badge">🏆 Winner</span>' if is_winner else ''}
+            # استخدام container لتجميع العناصر
+            with st.container():
+                # الرأس: الميدالية والشارة
+                col_rank, col_badge = st.columns([1, 2])
+                with col_rank:
+                    st.markdown(f"<span style='font-size: 28px;'>{medal_icons[i]}</span>", unsafe_allow_html=True)
+                with col_badge:
+                    if is_winner:
+                        st.markdown("<span class='winner-badge'>🏆 Winner</span>", unsafe_allow_html=True)
+                
+                # اسم الشركة
+                st.markdown(f"<h3 style='text-align: center; margin: 10px 0 5px 0;'>{row['company']}</h3>", unsafe_allow_html=True)
+                
+                # الدرجة الكلية
+                st.markdown(f"""
+                    <div style='text-align: center;'>
+                        <span style='font-size: 36px; font-weight: 700; color: {border_color};'>{row['overall_score']:.1f}</span>
+                        <div style='font-size: 14px; color: #64748b;'>Overall ESG Score</div>
                     </div>
-                    
-                    <h3 style='margin: 10px 0 5px 0;'>{row['company']}</h3>
-                    
-                    <div class='score' style='color: {border_color};'>{row['overall_score']:.1f}</div>
-                    <div class='score-label'>Overall ESG Score</div>
-                    
-                    <div style='margin: 15px 0;'>
-                        <div class='metric-label'>
-                            <span>🌿 Environmental</span>
-                            <span><strong>{row['environmental_score']:.0f}%</strong></span>
-                        </div>
-                        <div class='progress-bar'>
-                            <div class='progress-fill' style='width: {min(row['environmental_score'], 100)}%; background: linear-gradient(90deg, #2E7D32, #4CAF50);'></div>
-                        </div>
-                        
-                        <div class='metric-label'>
-                            <span>👥 Social</span>
-                            <span><strong>{row['social_score']:.0f}%</strong></span>
-                        </div>
-                        <div class='progress-bar'>
-                            <div class='progress-fill' style='width: {min(row['social_score'], 100)}%; background: linear-gradient(90deg, #1565C0, #42A5F5);'></div>
-                        </div>
-                        
-                        <div class='metric-label'>
-                            <span>🏛️ Governance</span>
-                            <span><strong>{row['governance_score']:.0f}%</strong></span>
-                        </div>
-                        <div class='progress-bar'>
-                            <div class='progress-fill' style='width: {min(row['governance_score'], 100)}%; background: linear-gradient(90deg, #6A1B9A, #AB47BC);'></div>
-                        </div>
+                """, unsafe_allow_html=True)
+                
+                # المقاييس مع شرائط التقدم
+                st.markdown("<div style='margin: 15px 0;'>", unsafe_allow_html=True)
+                
+                # Environmental
+                env_score = row['environmental_score']
+                st.markdown(f"""
+                    <div style='display: flex; justify-content: space-between; font-size: 13px; color: #334155;'>
+                        <span>🌿 Environmental</span>
+                        <span><strong>{env_score:.0f}%</strong></span>
                     </div>
-                    
+                    <div class='progress-bar'>
+                        <div class='progress-fill' style='width: {min(env_score, 100)}%; background: linear-gradient(90deg, #2E7D32, #4CAF50);'></div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Social
+                social_score = row['social_score']
+                st.markdown(f"""
+                    <div style='display: flex; justify-content: space-between; font-size: 13px; color: #334155;'>
+                        <span>👥 Social</span>
+                        <span><strong>{social_score:.0f}%</strong></span>
+                    </div>
+                    <div class='progress-bar'>
+                        <div class='progress-fill' style='width: {min(social_score, 100)}%; background: linear-gradient(90deg, #1565C0, #42A5F5);'></div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Governance
+                gov_score = row['governance_score']
+                st.markdown(f"""
+                    <div style='display: flex; justify-content: space-between; font-size: 13px; color: #334155;'>
+                        <span>🏛️ Governance</span>
+                        <span><strong>{gov_score:.0f}%</strong></span>
+                    </div>
+                    <div class='progress-bar'>
+                        <div class='progress-fill' style='width: {min(gov_score, 100)}%; background: linear-gradient(90deg, #6A1B9A, #AB47BC);'></div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                # المؤشرات السريعة (pills)
+                st.markdown(f"""
                     <div style='display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px;'>
                         <span class='metric-pill'>🌿 GHG: {row['ghg_emissions']:.1f}M</span>
                         <span class='metric-pill'>♻️ Recycle: {row['recycling_rate']:.0f}%</span>
                         <span class='metric-pill'>⚡ Carbon: {row['upstream_carbon_intensity']:.1f}kg</span>
                         <span class='metric-pill'>🛡️ Safety: {row['safety_ltir']:.3f}</span>
                     </div>
-                </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
 def display_charts(df_calc):
     """عرض الرسوم البيانية"""
@@ -793,7 +816,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 3 أعمدة لرفع الملفات
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -830,14 +852,14 @@ with col3:
 # MAIN APP - ANALYSIS BUTTON
 # -----------------------
 if st.button("🚀 Run ESG Analysis", type="primary", use_container_width=True):
-    with st.spinner("📊 Analyzing ESG performance of Saudi Aramco, ExxonMobil, and BP..."):
+    with st.spinner("📊 Analyzing ESG performance..."):
         df = process_uploaded_reports(exxon_file, aramco_file, bp_file)
         df_calc = calculate_esg_scores(df)
         insights = generate_smart_insights(df_calc)
         st.session_state.results = df_calc
         st.session_state.insights = insights
         st.session_state.analysis_done = True
-    st.success("✅ Analysis complete! Results displayed below.")
+    st.success("✅ Analysis complete!")
     st.balloons()
 
 if st.session_state.get('analysis_done', False) and st.session_state.results is not None:
