@@ -12,8 +12,9 @@ import tempfile
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as RLImage
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as RLImage, KeepTogether
 from reportlab.lib.units import inch, cm
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 import plotly.io as pio
 import base64
 
@@ -83,9 +84,6 @@ st.markdown("""
         background: #F1F5F9;
         margin: 3px;
     }
-    .gold { color: #F59E0B; font-weight: bold; }
-    .silver { color: #94A3B8; font-weight: bold; }
-    .bronze { color: #CD7F32; font-weight: bold; }
     
     .insight-box {
         background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%);
@@ -115,6 +113,10 @@ if "analysis_done" not in st.session_state:
     st.session_state.analysis_done = False
 if "results" not in st.session_state:
     st.session_state.results = None
+if "insights" not in st.session_state:
+    st.session_state.insights = None
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = None
 
 if not st.session_state.logged_in:
     st.markdown("""
@@ -452,12 +454,10 @@ def generate_smart_insights(df_calc):
     """توليد تحليلات ذكية (Smart Insights)"""
     insights = []
     
-    # تحديد الفائز
     winner = df_calc.loc[df_calc['overall_score'].idxmax()]
     sorted_df = df_calc.sort_values('overall_score', ascending=False)
     runner = sorted_df.iloc[1] if len(sorted_df) > 1 else None
     
-    # 1. تحليل الأداء العام
     insights.append({
         "category": "🏆 Overall Performance",
         "insight": f"{winner['company']} achieves the highest ESG score ({winner['overall_score']:.1f}/100), outperforming competitors through balanced performance across all three pillars.",
@@ -472,7 +472,6 @@ def generate_smart_insights(df_calc):
             "priority": "Medium"
         })
     
-    # 2. تحليل البيئي
     env_winner = df_calc.loc[df_calc['environmental_score'].idxmax()]
     insights.append({
         "category": "🌿 Environmental Leadership",
@@ -480,7 +479,6 @@ def generate_smart_insights(df_calc):
         "priority": "High"
     })
     
-    # 3. تحليل الاجتماعي
     social_winner = df_calc.loc[df_calc['social_score'].idxmax()]
     insights.append({
         "category": "👥 Social Impact",
@@ -488,7 +486,6 @@ def generate_smart_insights(df_calc):
         "priority": "Medium"
     })
     
-    # 4. تحليل الحوكمة
     gov_winner = df_calc.loc[df_calc['governance_score'].idxmax()]
     insights.append({
         "category": "🏛️ Governance Excellence",
@@ -496,7 +493,6 @@ def generate_smart_insights(df_calc):
         "priority": "Medium"
     })
     
-    # 5. تحليل الانبعاثات
     lowest_ghg = df_calc.loc[df_calc['ghg_emissions'].idxmin()]
     avg_ghg = df_calc['ghg_emissions'].mean()
     insights.append({
@@ -505,7 +501,6 @@ def generate_smart_insights(df_calc):
         "priority": "High"
     })
     
-    # 6. تحليل السلامة
     safest = df_calc.loc[df_calc['safety_ltir'].idxmin()]
     insights.append({
         "category": "🛡️ Safety Performance",
@@ -513,7 +508,6 @@ def generate_smart_insights(df_calc):
         "priority": "High"
     })
     
-    # 7. تحليل الاستثمار في R&D
     top_rnd = df_calc.loc[df_calc['rnd_spend'].idxmax()]
     insights.append({
         "category": "💡 Innovation & R&D",
@@ -521,7 +515,6 @@ def generate_smart_insights(df_calc):
         "priority": "Medium"
     })
     
-    # 8. تحليل التنوع
     top_female = df_calc.loc[df_calc['female_representation'].idxmax()]
     insights.append({
         "category": "⚖️ Diversity & Inclusion",
@@ -541,7 +534,6 @@ def generate_strategic_recommendations(df_calc):
             "recommendations": []
         }
         
-        # Environmental Recommendations
         if row['environmental_score'] < 70:
             rec['recommendations'].append({
                 "pillar": "🌿 Environmental",
@@ -564,7 +556,6 @@ def generate_strategic_recommendations(df_calc):
                 "priority": "Medium"
             })
         
-        # Social Recommendations
         if row['safety_ltir'] > 0.02:
             rec['recommendations'].append({
                 "pillar": "🛡️ Safety",
@@ -587,7 +578,6 @@ def generate_strategic_recommendations(df_calc):
                 "priority": "Medium"
             })
         
-        # Governance Recommendations
         if row['rnd_spend'] < 1200:
             rec['recommendations'].append({
                 "pillar": "🔬 Innovation",
@@ -608,9 +598,9 @@ def generate_strategic_recommendations(df_calc):
     return recommendations
 
 # -----------------------
-# GENERATE PDF REPORT
+# GENERATE PDF REPORT - VERSION WITH CHARTS
 # -----------------------
-def save_plotly_fig_as_image(fig, width=800, height=400):
+def save_plotly_fig_as_image(fig, width=800, height=500):
     """حفظ الرسم البياني من plotly كصورة مؤقتة"""
     try:
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
@@ -619,41 +609,94 @@ def save_plotly_fig_as_image(fig, width=800, height=400):
     except Exception as e:
         return None
 
-def generate_pdf_report(df_calc, insights, recommendations):
-    """توليد تقرير PDF شامل"""
+def generate_pdf_report_with_charts(df_calc, insights, recommendations):
+    """توليد تقرير PDF شامل مع الرسوم البيانية"""
     
     filename = f"ESG_Benchmarking_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    
+    # إنشاء الرسوم البيانية
+    categories = ['environmental_score', 'social_score', 'governance_score']
+    labels = ['Environmental', 'Social', 'Governance']
+    colors_plot = ['#2E7D32', '#1565C0', '#6A1B9A']
+    
+    # Radar Chart
+    fig_radar = go.Figure()
+    for i, company in enumerate(df_calc['company']):
+        values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
+        fig_radar.add_trace(go.Scatterpolar(
+            r=values,
+            theta=labels,
+            fill='toself',
+            name=company,
+            line_color=colors_plot[i % len(colors_plot)],
+            fillcolor=f'rgba({int(colors_plot[i % len(colors_plot)][1:3], 16)}, {int(colors_plot[i % len(colors_plot)][3:5], 16)}, {int(colors_plot[i % len(colors_plot)][5:7], 16)}, 0.2)'
+        ))
+    
+    fig_radar.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        title="ESG Performance Radar Chart",
+        height=500,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    
+    # Bar Chart
+    fig_bar = go.Figure()
+    for i, company in enumerate(df_calc['company']):
+        values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
+        fig_bar.add_trace(go.Bar(
+            name=company,
+            x=labels,
+            y=values,
+            marker_color=colors_plot[i % len(colors_plot)]
+        ))
+    
+    fig_bar.update_layout(
+        title="ESG Scores Comparison",
+        yaxis_title="Score (%)",
+        height=450,
+        barmode='group',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    
+    # حفظ الصور
+    img_radar = save_plotly_fig_as_image(fig_radar)
+    img_bar = save_plotly_fig_as_image(fig_bar)
+    
+    # إنشاء PDF
     doc = SimpleDocTemplate(filename, pagesize=A4, 
-                           rightMargin=72, leftMargin=72,
-                           topMargin=72, bottomMargin=72)
+                           rightMargin=60, leftMargin=60,
+                           topMargin=60, bottomMargin=60)
     
     styles = getSampleStyleSheet()
     story = []
     
     # Custom styles
     title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], 
-                                 fontSize=24, textColor=colors.HexColor('#1B5E20'),
-                                 spaceAfter=30, alignment=1)
+                                 fontSize=22, textColor=colors.HexColor('#1B5E20'),
+                                 spaceAfter=20, alignment=TA_CENTER)
     heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], 
                                    fontSize=16, textColor=colors.HexColor('#2E7D32'),
-                                   spaceAfter=12, spaceBefore=16)
+                                   spaceAfter=10, spaceBefore=15)
     subheading_style = ParagraphStyle('CustomSubheading', parent=styles['Heading3'],
                                       fontSize=13, textColor=colors.HexColor('#0D47A1'),
-                                      spaceAfter=8, spaceBefore=10)
+                                      spaceAfter=6, spaceBefore=8)
+    normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'],
+                                  fontSize=10, spaceAfter=4, alignment=TA_JUSTIFY)
     
     # 1. Cover Page
     story.append(Paragraph("🏆 Global Energy ESG Benchmarking Report", title_style))
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
     story.append(Paragraph("2025 Sustainability Analysis: Saudi Aramco · ExxonMobil · BP", styles['Heading2']))
-    story.append(Spacer(1, 36))
+    story.append(Spacer(1, 30))
     
-    story.append(Paragraph("<b>Team Leader:</b> Ismail Kamal", styles['Normal']))
-    story.append(Paragraph("<b>Team Members:</b> Adel ElSayed, Mohamed Gaber, Ahmed Omar, Sherouk Ashraf, Mohamed ElHammadi, Farouk Sameh", styles['Normal']))
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("<b><font color='red'>Under Supervision: Dr. Mohamed Tash</font></b>", styles['Normal']))
-    story.append(Paragraph("<b>QHSE Master at Alexandria University</b>", styles['Normal']))
-    story.append(Spacer(1, 12))
-    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+    story.append(Paragraph("<b>Team Leader:</b> Ismail Kamal", normal_style))
+    story.append(Paragraph("<b>Team Members:</b> Adel ElSayed, Mohamed Gaber, Ahmed Omar, Sherouk Ashraf, Mohamed ElHammadi, Farouk Sameh", normal_style))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("<b><font color='red'>Under Supervision: Dr. Mohamed Tash</font></b>", normal_style))
+    story.append(Paragraph("<b>QHSE Master at Alexandria University</b>", normal_style))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%B %d, %Y')}", normal_style))
     
     # 2. Executive Summary
     story.append(PageBreak())
@@ -663,17 +706,17 @@ def generate_pdf_report(df_calc, insights, recommendations):
     summary_text = f"""
     This comprehensive ESG benchmarking report analyzes the sustainability performance of three major energy companies: 
     Saudi Aramco, ExxonMobil, and BP for the year 2025.
-    
+    <br/><br/>
     <b>Key Findings:</b><br/>
     • <b>Overall Winner:</b> {winner['company']} with an ESG score of {winner['overall_score']:.1f}/100<br/>
     • <b>Environmental Leader:</b> {df_calc.loc[df_calc['environmental_score'].idxmax()]['company']}<br/>
     • <b>Social Leader:</b> {df_calc.loc[df_calc['social_score'].idxmax()]['company']}<br/>
     • <b>Governance Leader:</b> {df_calc.loc[df_calc['governance_score'].idxmax()]['company']}<br/>
     """
-    story.append(Paragraph(summary_text, styles['Normal']))
+    story.append(Paragraph(summary_text, normal_style))
     
     # 3. Scores Table
-    story.append(PageBreak())
+    story.append(Spacer(1, 10))
     story.append(Paragraph("📊 ESG Scores Summary", heading_style))
     
     table_data = [
@@ -695,17 +738,34 @@ def generate_pdf_report(df_calc, insights, recommendations):
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
     story.append(table)
     
-    # 4. Winner Analysis
+    # 4. Charts
     story.append(PageBreak())
-    story.append(Paragraph("🏆 Winner Analysis: " + winner['company'], heading_style))
+    story.append(Paragraph("📈 Performance Charts", heading_style))
+    story.append(Spacer(1, 6))
+    
+    if img_radar and os.path.exists(img_radar):
+        story.append(RLImage(img_radar, width=420, height=280))
+        story.append(Spacer(1, 10))
+    
+    if img_bar and os.path.exists(img_bar):
+        story.append(RLImage(img_bar, width=420, height=260))
+        story.append(Spacer(1, 6))
+    
+    # 5. Winner Analysis
+    story.append(PageBreak())
+    story.append(Paragraph(f"🏆 Winner Analysis: {winner['company']}", heading_style))
+    
+    rating = "A+ (Excellent)" if winner['overall_score'] >= 85 else "A (Very Good)" if winner['overall_score'] >= 75 else "B+ (Good)"
     
     winner_text = f"""
     <b>Overall Score:</b> {winner['overall_score']:.1f}/100<br/>
-    <b>ESG Rating:</b> {'A+ (Excellent)' if winner['overall_score'] >= 85 else 'A (Very Good)' if winner['overall_score'] >= 75 else 'B+ (Good)'}<br/><br/>
+    <b>ESG Rating:</b> {rating}<br/><br/>
     <b>Key Strengths:</b><br/>
     • Environmental Score: {winner['environmental_score']:.1f}%<br/>
     • Social Score: {winner['social_score']:.1f}%<br/>
@@ -714,40 +774,48 @@ def generate_pdf_report(df_calc, insights, recommendations):
     • Recycling Rate: {winner['recycling_rate']:.1f}%<br/>
     • Safety LTIR: {winner['safety_ltir']:.3f}
     """
-    story.append(Paragraph(winner_text, styles['Normal']))
+    story.append(Paragraph(winner_text, normal_style))
     
-    # 5. Smart Insights
+    # 6. Smart Insights
     story.append(PageBreak())
     story.append(Paragraph("🧠 Smart Insights & Analysis", heading_style))
     
     for insight in insights:
         story.append(Paragraph(f"<b>{insight['category']}</b>", subheading_style))
-        story.append(Paragraph(insight['insight'], styles['Normal']))
+        story.append(Paragraph(insight['insight'], normal_style))
+        story.append(Paragraph(f"<i>Priority: {insight['priority']}</i>", normal_style))
         story.append(Spacer(1, 6))
-        story.append(Paragraph(f"<i>Priority: {insight['priority']}</i>", styles['Normal']))
-        story.append(Spacer(1, 12))
     
-    # 6. Strategic Recommendations
+    # 7. Strategic Recommendations
     story.append(PageBreak())
     story.append(Paragraph("💡 Strategic Recommendations", heading_style))
     
     for rec in recommendations:
         story.append(Paragraph(f"<b>{rec['company']}</b>", subheading_style))
         for action in rec['recommendations']:
-            story.append(Paragraph(f"{action['pillar']} - <b>{action['action']}</b>", styles['Normal']))
-            story.append(Paragraph(f"• Expected Impact: {action['impact']}", styles['Normal']))
-            story.append(Paragraph(f"• Priority: {action['priority']}", styles['Normal']))
-            story.append(Spacer(1, 6))
-        story.append(Spacer(1, 12))
+            story.append(Paragraph(f"{action['pillar']} - <b>{action['action']}</b>", normal_style))
+            story.append(Paragraph(f"• Expected Impact: {action['impact']}", normal_style))
+            story.append(Paragraph(f"• Priority: {action['priority']}", normal_style))
+            story.append(Spacer(1, 4))
+        story.append(Spacer(1, 6))
     
-    # 7. Footer
+    # 8. Footer
     story.append(PageBreak())
-    story.append(Paragraph("<hr/>", styles['Normal']))
-    story.append(Paragraph("<b>Global Energy ESG Benchmarking 2025</b>", styles['Normal']))
-    story.append(Paragraph("Developed by Ismail Kamal & Team | Under Supervision of Dr. Mohamed Tash", styles['Normal']))
-    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Spacer(1, 40))
+    story.append(Paragraph("<hr/>", normal_style))
+    story.append(Paragraph("<b>Global Energy ESG Benchmarking 2025</b>", normal_style))
+    story.append(Paragraph("Developed by Ismail Kamal & Team | Under Supervision of Dr. Mohamed Tash", normal_style))
+    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", normal_style))
     
+    # Build PDF
     doc.build(story)
+    
+    # Cleanup temp files
+    if img_radar and os.path.exists(img_radar):
+        os.remove(img_radar)
+    if img_bar and os.path.exists(img_bar):
+        os.remove(img_bar)
+    
     return filename
 
 # -----------------------
@@ -997,7 +1065,6 @@ def display_predictive_insights(df_calc, insights, recommendations):
                 </div>
             """, unsafe_allow_html=True)
     
-    # Display Smart Insights
     st.markdown("---")
     st.subheader("🧠 Smart Insights")
     for insight in insights:
@@ -1009,7 +1076,6 @@ def display_predictive_insights(df_calc, insights, recommendations):
             </div>
         """, unsafe_allow_html=True)
     
-    # Display Strategic Recommendations
     st.markdown("---")
     st.subheader("💡 Strategic Recommendations")
     
@@ -1103,9 +1169,9 @@ if st.session_state.analysis_done and st.session_state.results is not None:
         )
     
     with col2:
-        if st.button("📄 Download Full PDF Report", use_container_width=True, type="primary"):
-            with st.spinner("Generating comprehensive PDF report..."):
-                pdf_file = generate_pdf_report(df_calc, insights, recommendations)
+        if st.button("📄 Download Full PDF Report (Print Ready)", use_container_width=True, type="primary"):
+            with st.spinner("Generating comprehensive PDF report with charts..."):
+                pdf_file = generate_pdf_report_with_charts(df_calc, insights, recommendations)
                 with open(pdf_file, "rb") as f:
                     st.download_button(
                         label="✅ Click to Download PDF Report",
