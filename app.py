@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # -----------------------
-# CUSTOM CSS (مبسط وخالي من الأخطاء)
+# CUSTOM CSS
 # -----------------------
 st.markdown("""
     <style>
@@ -35,20 +35,37 @@ st.markdown("""
         color: #E8F5E9;
         margin: 10px 0 0 0;
     }
+    
     .company-card {
         background: white;
         border-radius: 20px;
-        padding: 20px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        padding: 25px 20px 20px 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
         border: 2px solid #E2E8F0;
-        margin: 10px 0;
+        margin: 10px 5px;
         text-align: center;
         transition: all 0.3s;
+        height: 100%;
     }
     .company-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        transform: translateY(-5px);
+        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
     }
+    .company-card .rank {
+        font-size: 14px;
+        color: #64748b;
+    }
+    .company-card .score {
+        font-size: 36px;
+        font-weight: 700;
+        margin: 10px 0;
+    }
+    .company-card .score-label {
+        font-size: 14px;
+        color: #64748b;
+        margin-bottom: 15px;
+    }
+    
     .progress-bar {
         width: 100%;
         height: 8px;
@@ -62,6 +79,7 @@ st.markdown("""
         border-radius: 10px;
         transition: width 0.8s ease;
     }
+    
     .winner-badge {
         background: linear-gradient(135deg, #F59E0B, #D97706);
         color: white;
@@ -71,27 +89,27 @@ st.markdown("""
         font-weight: 600;
         display: inline-block;
     }
-    .team-member {
-        color: #E8F5E9;
-        font-size: 14px;
+    
+    .metric-pill {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        background: #f1f5f9;
+        color: #334155;
+        margin: 3px;
     }
-    .team-leader {
-        color: #FFD54F;
-        font-weight: bold;
-        font-size: 16px;
-    }
-    .supervisor-name {
-        color: #FF0000;
-        font-weight: bold;
-        font-size: 20px;
-    }
-    .metric-card {
-        background: #f8fafc;
-        border-radius: 12px;
-        padding: 12px;
-        text-align: center;
-        border-left: 4px solid #1B5E20;
-        margin: 5px 0;
+    
+    .gold { color: #F59E0B; }
+    .silver { color: #94A3B8; }
+    .bronze { color: #CD7F32; }
+    
+    .metric-label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        color: #334155;
+        padding: 2px 0;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -192,20 +210,20 @@ with st.sidebar:
     st.markdown("""
         <div style='background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%); border-radius: 15px; padding: 15px;'>
             <h4 style='color: #FFD54F; text-align: center;'>👥 PROJECT TEAM</h4>
-            <p class='team-leader'>🏆 Ismail Kamal <span style='color: #E8F5E9; font-weight: normal;'>(Leader)</span></p>
-            <p class='team-member'>• Adel ElSayed</p>
-            <p class='team-member'>• Mohamed Gaber</p>
-            <p class='team-member'>• Ahmed Omar</p>
-            <p class='team-member'>• Sherouk Ashraf</p>
-            <p class='team-member'>• Mohamed ElHammadi</p>
-            <p class='team-member'>• Farouk Sameh</p>
+            <p style='color: #FFD54F; font-weight: bold;'>🏆 Ismail Kamal <span style='color: #E8F5E9; font-weight: normal;'>(Leader)</span></p>
+            <p style='color: #E8F5E9;'>• Adel ElSayed</p>
+            <p style='color: #E8F5E9;'>• Mohamed Gaber</p>
+            <p style='color: #E8F5E9;'>• Ahmed Omar</p>
+            <p style='color: #E8F5E9;'>• Sherouk Ashraf</p>
+            <p style='color: #E8F5E9;'>• Mohamed ElHammadi</p>
+            <p style='color: #E8F5E9;'>• Farouk Sameh</p>
         </div>
     """, unsafe_allow_html=True)
     st.markdown("---")
     st.markdown("""
         <div style='background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%); border-radius: 15px; padding: 15px; text-align: center;'>
             <h4 style='color: #2E7D32;'>🎓 SUPERVISOR</h4>
-            <p class='supervisor-name'>Dr. Mohamed Tash</p>
+            <p style='color: #FF0000; font-weight: bold; font-size: 20px;'>Dr. Mohamed Tash</p>
             <p style='color: #2E7D32; font-weight: bold;'>QHSE Master at Alexandria University</p>
         </div>
     """, unsafe_allow_html=True)
@@ -217,8 +235,6 @@ with st.sidebar:
 # -----------------------
 @st.cache_data
 def get_company_data():
-    """بيانات مستخرجة من تقارير 2025 للشركات الثلاث"""
-    
     data = {
         "company": ["ExxonMobil", "Saudi Aramco", "BP"],
         "ghg_emissions": [34.3, 58.0, 34.3],
@@ -244,7 +260,6 @@ def get_company_data():
     return pd.DataFrame(data)
 
 def calculate_esg_scores(df):
-    """حساب درجات ESG مع أوزان مخصصة"""
     df_calc = df.copy()
     
     # Environmental Score (40%)
@@ -343,10 +358,9 @@ def calculate_esg_scores(df):
     return df_calc
 
 # -----------------------
-# DISPLAY FUNCTIONS
+# DISPLAY FUNCTIONS - المحسنة
 # -----------------------
 def display_winner_analysis(df_calc):
-    """عرض تحليل الفائز"""
     winner = df_calc.loc[df_calc['overall_score'].idxmax()]
     
     st.markdown("---")
@@ -385,13 +399,12 @@ def display_winner_analysis(df_calc):
                     <li>✅ Methane: {winner['methane_intensity']:.2f}%</li>
                     <li>✅ Recycling: {winner['recycling_rate']:.1f}%</li>
                     <li>✅ Safety LTIR: {winner['safety_ltir']:.3f}</li>
-                    <li>✅ R&D: ${winner['rnd_spend']:.0f}M</li>
                 </ul>
             </div>
         """, unsafe_allow_html=True)
 
 def display_company_cards(df_calc):
-    """عرض بطاقات الشركات"""
+    """عرض بطاقات الشركات بشكل احترافي - بدون HTML خام"""
     st.subheader("📊 Company Rankings")
     df_sorted = df_calc.sort_values('overall_score', ascending=False).reset_index(drop=True)
     
@@ -405,36 +418,39 @@ def display_company_cards(df_calc):
             is_winner = (i == 0)
             border_color = medal_colors[i] if i < 3 else '#475569'
             
+            # بناء البطاقة باستخدام st.markdown مع HTML صحيح
             st.markdown(f"""
-                <div class='company-card' style='border: 2px solid {border_color};'>
+                <div class='company-card' style='border-color: {border_color};'>
                     <div style='display: flex; justify-content: space-between; align-items: center;'>
                         <span style='font-size: 28px;'>{medal_icons[i]}</span>
-                        {'<span class="winner-badge">🏆 Winner</span>' if is_winner else f'<span style="color: #64748b;">#{row["rank"]}</span>'}
+                        {'<span class="winner-badge">🏆 Winner</span>' if is_winner else ''}
                     </div>
+                    
                     <h3 style='margin: 10px 0 5px 0;'>{row['company']}</h3>
-                    <div style='font-size: 36px; font-weight: 700; color: {border_color};'>{row['overall_score']:.1f}</div>
-                    <div style='font-size: 14px; color: #64748b;'>Overall ESG Score</div>
+                    
+                    <div class='score' style='color: {border_color};'>{row['overall_score']:.1f}</div>
+                    <div class='score-label'>Overall ESG Score</div>
                     
                     <div style='margin: 15px 0;'>
-                        <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                        <div class='metric-label'>
                             <span>🌿 Environmental</span>
-                            <span>{row['environmental_score']:.0f}%</span>
+                            <span><strong>{row['environmental_score']:.0f}%</strong></span>
                         </div>
                         <div class='progress-bar'>
                             <div class='progress-fill' style='width: {min(row['environmental_score'], 100)}%; background: linear-gradient(90deg, #2E7D32, #4CAF50);'></div>
                         </div>
                         
-                        <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                        <div class='metric-label'>
                             <span>👥 Social</span>
-                            <span>{row['social_score']:.0f}%</span>
+                            <span><strong>{row['social_score']:.0f}%</strong></span>
                         </div>
                         <div class='progress-bar'>
                             <div class='progress-fill' style='width: {min(row['social_score'], 100)}%; background: linear-gradient(90deg, #1565C0, #42A5F5);'></div>
                         </div>
                         
-                        <div style='display: flex; justify-content: space-between; font-size: 13px;'>
+                        <div class='metric-label'>
                             <span>🏛️ Governance</span>
-                            <span>{row['governance_score']:.0f}%</span>
+                            <span><strong>{row['governance_score']:.0f}%</strong></span>
                         </div>
                         <div class='progress-bar'>
                             <div class='progress-fill' style='width: {min(row['governance_score'], 100)}%; background: linear-gradient(90deg, #6A1B9A, #AB47BC);'></div>
@@ -442,15 +458,10 @@ def display_company_cards(df_calc):
                     </div>
                     
                     <div style='display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px;'>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>
-                            🌿 GHG: {row['ghg_emissions']:.1f}M
-                        </span>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>
-                            ♻️ Recycle: {row['recycling_rate']:.0f}%
-                        </span>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>
-                            ⚡ Carbon: {row['upstream_carbon_intensity']:.1f}kg
-                        </span>
+                        <span class='metric-pill'>🌿 GHG: {row['ghg_emissions']:.1f}M</span>
+                        <span class='metric-pill'>♻️ Recycle: {row['recycling_rate']:.0f}%</span>
+                        <span class='metric-pill'>⚡ Carbon: {row['upstream_carbon_intensity']:.1f}kg</span>
+                        <span class='metric-pill'>🛡️ Safety: {row['safety_ltir']:.3f}</span>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -634,29 +645,19 @@ if st.session_state.get('analysis_done', False) and st.session_state.results is 
     df_calc = st.session_state.results
     insights = st.session_state.insights
     
-    # 1. Winner Analysis
     display_winner_analysis(df_calc)
-    
-    # 2. Company Cards
     st.markdown("---")
     display_company_cards(df_calc)
-    
-    # 3. Charts
     st.markdown("---")
     display_charts(df_calc)
-    
-    # 4. Detailed Comparison Table
     st.markdown("---")
     display_detailed_comparison(df_calc)
-    
-    # 5. Predictive Insights & Smart Insights
     st.markdown("---")
     display_predictive_insights(df_calc, insights)
     
-    # 6. Export
+    # Export
     st.markdown("---")
     st.markdown("## 📥 Export Results")
-    
     csv = df_calc.to_csv(index=False)
     st.download_button(
         label="📊 Download ESG Analysis as CSV",
