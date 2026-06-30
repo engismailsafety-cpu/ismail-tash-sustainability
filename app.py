@@ -16,7 +16,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.units import inch, cm
 import tempfile
 import os
-import matplotlib.pyplot as plt
 
 # -----------------------
 # PAGE CONFIG
@@ -532,10 +531,10 @@ def process_uploaded_reports(files):
     return calculate_professional_scores(df)
 
 # -----------------------
-# PDF EXPORT FUNCTIONS
+# PDF EXPORT FUNCTIONS (بدون matplotlib)
 # -----------------------
-def save_fig_as_image(fig, width=600, height=400):
-    """حفظ الرسم البياني كصورة مؤقتة"""
+def save_plotly_fig_as_image(fig, width=600, height=400):
+    """حفظ الرسم البياني من plotly كصورة مؤقتة"""
     try:
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
             fig.write_image(tmp.name, width=width, height=height, scale=1)
@@ -544,7 +543,7 @@ def save_fig_as_image(fig, width=600, height=400):
         return None
 
 def generate_pdf_report(df_calc, winner, runner):
-    """توليد تقرير PDF كامل"""
+    """توليد تقرير PDF كامل (نصي فقط)"""
     
     filename = f"ESG_Benchmarking_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     doc = SimpleDocTemplate(filename, pagesize=A4, 
@@ -700,13 +699,14 @@ def generate_pdf_report(df_calc, winner, runner):
     return filename
 
 def generate_pdf_with_charts(df_calc, winner, runner):
-    """توليد تقرير PDF مع الرسوم البيانية"""
+    """توليد تقرير PDF مع الرسوم البيانية (بدون matplotlib)"""
     try:
-        # إنشاء الرسوم البيانية
+        # إنشاء الرسوم البيانية باستخدام plotly
         categories = ['Environmental_Score', 'Social_Score', 'Governance_Score', 'Operational_Score']
         labels = ['Environmental', 'Social', 'Governance', 'Operational']
         colors_plot = ['#2E7D32', '#1565C0', '#6A1B9A', '#F57C00']
         
+        # Radar Chart
         fig_radar = go.Figure()
         for i, company in enumerate(df_calc['Company']):
             values = df_calc[df_calc['Company'] == company][categories].values.flatten().tolist()
@@ -726,6 +726,7 @@ def generate_pdf_with_charts(df_calc, winner, runner):
             showlegend=True
         )
         
+        # Bar Chart
         fig_bar = go.Figure()
         for i, company in enumerate(df_calc['Company']):
             values = df_calc[df_calc['Company'] == company][categories].values.flatten().tolist()
@@ -744,8 +745,8 @@ def generate_pdf_with_charts(df_calc, winner, runner):
         )
         
         # حفظ الصور
-        img_radar = save_fig_as_image(fig_radar)
-        img_bar = save_fig_as_image(fig_bar)
+        img_radar = save_plotly_fig_as_image(fig_radar)
+        img_bar = save_plotly_fig_as_image(fig_bar)
         
         if not img_radar or not img_bar:
             return generate_pdf_report(df_calc, winner, runner)
@@ -843,10 +844,11 @@ def generate_pdf_with_charts(df_calc, winner, runner):
         return filename
         
     except Exception as e:
+        # في حالة فشل حفظ الصور، نستخدم التقرير النصي فقط
         return generate_pdf_report(df_calc, winner, runner)
 
 # -----------------------
-# DISPLAY FUNCTIONS
+# DISPLAY FUNCTIONS (المختصرة للمساحة)
 # -----------------------
 def display_winner_analysis(df_calc):
     winner = df_calc.loc[df_calc['Overall_Score'].idxmax()]
