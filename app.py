@@ -9,6 +9,14 @@ import numpy as np
 import io
 import base64
 from pypdf import PdfReader
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.lib.units import inch, cm
+import tempfile
+import os
+import matplotlib.pyplot as plt
 
 # -----------------------
 # PAGE CONFIG
@@ -20,7 +28,7 @@ st.set_page_config(
 )
 
 # -----------------------
-# CUSTOM CSS
+# CUSTOM CSS - مع تحسين ألوان الفريق
 # -----------------------
 st.markdown("""
     <style>
@@ -34,6 +42,56 @@ st.markdown("""
     }
     .main-header h1 { color: white; margin: 0; font-size: 36px; font-weight: 700; }
     .main-header p { color: #E8F5E9; margin: 15px 0 0 0; }
+    
+    /* تحسين ألوان الفريق - نص أبيض على خلفية داكنة */
+    .team-container {
+        background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%);
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        border: 1px solid rgba(255,215,0,0.3);
+    }
+    .team-title {
+        color: #FFD54F !important;
+        font-size: 20px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 15px;
+    }
+    .team-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .team-table th {
+        background: rgba(255,255,255,0.15);
+        color: #E8F5E9 !important;
+        padding: 12px;
+        text-align: center;
+        font-size: 16px;
+    }
+    .team-table td {
+        padding: 10px;
+        text-align: center;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        color: #FFFFFF !important;
+        font-size: 15px;
+    }
+    .team-leader-row {
+        background: rgba(255,215,0,0.15);
+    }
+    .team-leader-name {
+        color: #FFD54F !important;
+        font-weight: bold !important;
+        font-size: 17px !important;
+    }
+    .team-member-name {
+        color: #FFFFFF !important;
+        font-size: 15px !important;
+    }
+    .team-leader-label {
+        color: #FFD54F !important;
+        font-weight: bold;
+    }
     
     .company-card {
         background: white;
@@ -77,6 +135,31 @@ st.markdown("""
         background: #F1F5F9;
         margin: 3px;
     }
+    .supervisor-card {
+        background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%);
+        padding: 30px;
+        border-radius: 20px;
+        text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        border: 1px solid rgba(255,215,0,0.3);
+    }
+    .supervisor-title {
+        color: #FFD54F;
+        font-size: 22px;
+        margin: 0 0 10px 0;
+    }
+    .supervisor-name {
+        color: #FF0000;
+        font-weight: bold;
+        font-size: 36px;
+        margin: 15px 0;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    .supervisor-qualification {
+        font-size: 18px;
+        color: white;
+        font-weight: bold;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -118,31 +201,56 @@ if not st.session_state.logged_in:
                     st.error("❌ Invalid username or password")
     
     st.markdown("---")
+    
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%); border-radius: 20px; padding: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);'>
-                <h3 style='text-align: center; background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); color: white; padding: 12px; border-radius: 12px;'>👥 PROJECT TEAM</h3>
-                <table style='width: 100%; border-collapse: collapse;'>
-                    <tr style='background: #E8F5E9;'><th style='padding: 8px; text-align: center;'>Role</th><th style='padding: 8px; text-align: center;'>Name</th></tr>
-                    <tr style='background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%);'><td style='padding: 8px; text-align: center;'><b>🏆 Team Leader</b></td><td style='padding: 8px; text-align: center; color: #D32F2F; font-weight: bold;'>Ismail Kamal</td></tr>
-                    <tr><td style='padding: 8px; text-align: center;'>📋 Team Member</td><td style='padding: 8px; text-align: center; color: #1565C0;'>Adel ElSayed</td></tr>
-                    <tr><td style='padding: 8px; text-align: center;'>📋 Team Member</td><td style='padding: 8px; text-align: center; color: #1565C0;'>Mohamed Gaber</td></tr>
-                    <tr><td style='padding: 8px; text-align: center;'>📋 Team Member</td><td style='padding: 8px; text-align: center; color: #1565C0;'>Ahmed Omar</td></tr>
-                    <tr><td style='padding: 8px; text-align: center;'>📋 Team Member</td><td style='padding: 8px; text-align: center; color: #1565C0;'>Sherouk Ashraf</td></tr>
-                    <tr><td style='padding: 8px; text-align: center;'>📋 Team Member</td><td style='padding: 8px; text-align: center; color: #1565C0;'>Mohamed ElHammadi</td></tr>
-                    <tr><td style='padding: 8px; text-align: center;'>📋 Team Member</td><td style='padding: 8px; text-align: center; color: #1565C0;'>Farouk Sameh</td></tr>
+            <div class='team-container'>
+                <div class='team-title'>👥 PROJECT TEAM</div>
+                <table class='team-table'>
+                    <tr>
+                        <th>Role</th>
+                        <th>Name</th>
+                    </tr>
+                    <tr class='team-leader-row'>
+                        <td class='team-leader-label'>🏆 Team Leader</td>
+                        <td class='team-leader-name'>Ismail Kamal</td>
+                    </tr>
+                    <tr>
+                        <td>📋 Team Member</td>
+                        <td class='team-member-name'>Adel ElSayed</td>
+                    </tr>
+                    <tr>
+                        <td>📋 Team Member</td>
+                        <td class='team-member-name'>Mohamed Gaber</td>
+                    </tr>
+                    <tr>
+                        <td>📋 Team Member</td>
+                        <td class='team-member-name'>Ahmed Omar</td>
+                    </tr>
+                    <tr>
+                        <td>📋 Team Member</td>
+                        <td class='team-member-name'>Sherouk Ashraf</td>
+                    </tr>
+                    <tr>
+                        <td>📋 Team Member</td>
+                        <td class='team-member-name'>Mohamed ElHammadi</td>
+                    </tr>
+                    <tr>
+                        <td>📋 Team Member</td>
+                        <td class='team-member-name'>Farouk Sameh</td>
+                    </tr>
                 </table>
             </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
-            <div style='background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%); padding: 30px; border-radius: 20px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.15);'>
-                <h3 style='color: #FFD54F; margin: 0;'>🎓 Under Supervision of</h3>
-                <h1 style='color: #FF0000; font-weight: bold; font-size: 36px; margin: 15px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);'>Dr. Mohamed Tash</h1>
-                <p style='font-size: 18px; color: white; font-weight: bold;'>QHSE Master at Alexandria University</p>
+            <div class='supervisor-card'>
+                <div class='supervisor-title'>🎓 Under Supervision of</div>
+                <div class='supervisor-name'>Dr. Mohamed Tash</div>
+                <div class='supervisor-qualification'>QHSE Master at Alexandria University</div>
                 <div style='margin-top: 15px; color: #FFD54F; font-size: 12px;'>⭐ Lead Supervisor | ESG Expert ⭐</div>
             </div>
         """, unsafe_allow_html=True)
@@ -163,30 +271,37 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------
-# SIDEBAR
+# SIDEBAR - مع تحسين ألوان الفريق
 # -----------------------
 with st.sidebar:
     st.markdown("<div style='text-align: center; font-size: 50px;'>🏆</div>", unsafe_allow_html=True)
-    st.markdown("### 👥 PROJECT TEAM")
     st.markdown("""
-    <div style='color: #E8F5E9;'>
-        <b style='color: #FFD54F;'>🏆 Ismail Kamal</b> (Leader)<br>
-        <span>• Adel ElSayed</span><br>
-        <span>• Mohamed Gaber</span><br>
-        <span>• Ahmed Omar</span><br>
-        <span>• Sherouk Ashraf</span><br>
-        <span>• Mohamed ElHammadi</span><br>
-        <span>• Farouk Sameh</span>
+    <div style='background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%); border-radius: 15px; padding: 15px;'>
+        <h4 style='color: #FFD54F; text-align: center;'>👥 PROJECT TEAM</h4>
+        <div style='color: #FFFFFF; font-size: 14px;'>
+            <p style='color: #FFD54F; font-weight: bold;'>🏆 Ismail Kamal <span style='color: #E8F5E9; font-weight: normal;'>(Leader)</span></p>
+            <p style='color: #E8F5E9;'>• Adel ElSayed</p>
+            <p style='color: #E8F5E9;'>• Mohamed Gaber</p>
+            <p style='color: #E8F5E9;'>• Ahmed Omar</p>
+            <p style='color: #E8F5E9;'>• Sherouk Ashraf</p>
+            <p style='color: #E8F5E9;'>• Mohamed ElHammadi</p>
+            <p style='color: #E8F5E9;'>• Farouk Sameh</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("### 🎓 Supervisor")
-    st.markdown("<span style='color: #FF0000; font-weight: bold; font-size: 18px;'>Dr. Mohamed Tash</span>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%); border-radius: 15px; padding: 15px; text-align: center;'>
+        <h4 style='color: #2E7D32;'>🎓 SUPERVISOR</h4>
+        <p style='color: #FF0000; font-weight: bold; font-size: 20px;'>Dr. Mohamed Tash</p>
+        <p style='color: #2E7D32; font-weight: bold; font-size: 12px;'>QHSE Master at Alexandria University</p>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
     st.caption("Version 10.0 | Professional ESG Benchmarking")
 
 # -----------------------
-# CORE FUNCTIONS (المعدلة)
+# CORE FUNCTIONS
 # -----------------------
 def extract_text_from_pdf(file):
     """استخراج النص من ملف PDF"""
@@ -208,10 +323,8 @@ def safe_extract_number(pattern, text, default=0):
     try:
         match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
         if match:
-            # حاول الحصول على أول مجموعة رقمية
             for group in match.groups():
                 if group is not None:
-                    # تنظيف النص من الفواصل والمسافات
                     clean = re.sub(r'[^\d.]', '', str(group))
                     if clean:
                         return float(clean)
@@ -220,9 +333,8 @@ def safe_extract_number(pattern, text, default=0):
         return default
 
 def extract_esg_metrics(text, company_name):
-    """استخراج مؤشرات ESG من النص بطريقة آمنة"""
+    """استخراج مؤشرات ESG من النص"""
     
-    # Environmental Metrics
     ghg = safe_extract_number(r'GHG\s*emissions?.*?(\d+(?:\.\d+)?)\s*(?:million|M)', text, 100)
     if ghg == 0:
         ghg = safe_extract_number(r'(\d+(?:\.\d+)?)\s*(?:million|M)\s*(?:tons?)?\s*(?:CO2|GHG)', text, 100)
@@ -232,41 +344,31 @@ def extract_esg_metrics(text, company_name):
     water = safe_extract_number(r'water\s*(?:intensity|consumption).*?(\d+(?:\.\d+)?)', text, 0.8)
     biodiversity = safe_extract_number(r'biodiversity\s*score.*?(\d+(?:\.\d+)?)', text, 70)
     methane = safe_extract_number(r'methane\s*intensity.*?(\d+(?:\.\d+)?)', text, 0.4)
-    
-    # Social Metrics
     ltir = safe_extract_number(r'LTIR|safety.*?(\d+(?:\.\d+)?)', text, 0.3)
     safety_events = safe_extract_number(r'(?:process\s*safety|PSI).*?(\d+)', text, 8)
     training = safe_extract_number(r'training\s*hours.*?(\d+(?:\.\d+)?)', text, 40)
     diversity = safe_extract_number(r'(?:women|female|diversity).*?(\d+(?:\.\d+)?)\s*%', text, 25)
-    
-    # Governance Metrics
     epi = safe_extract_number(r'EPI\s*score.*?(\d+(?:\.\d+)?)', text, 75)
     transparency = safe_extract_number(r'transparency\s*score.*?(\d+(?:\.\d+)?)', text, 80)
     risk = safe_extract_number(r'risk\s*score.*?(\d+(?:\.\d+)?)', text, 75)
-    
-    # Operational Metrics
     energy_eff = safe_extract_number(r'energy\s*efficiency.*?(\d+(?:\.\d+)?)\s*%', text, 82)
     carbon_int = safe_extract_number(r'carbon\s*intensity.*?(\d+(?:\.\d+)?)', text, 200)
     
     return {
         "Company": company_name,
-        # Environmental (35%)
         "GHG_Emissions": ghg,
         "Renewable_Energy": renewable,
         "Recycling_Rate": recycling,
         "Water_Intensity": water,
         "Biodiversity_Score": biodiversity,
         "Methane_Intensity": methane,
-        # Social (25%)
         "Safety_LTIR": ltir,
         "Process_Safety_Events": safety_events,
         "Training_Hours": training,
         "Diversity_Rate": diversity,
-        # Governance (20%)
         "EPI_Score": epi,
         "Transparency_Score": transparency,
         "Risk_Score": risk,
-        # Operational (20%)
         "Energy_Efficiency": energy_eff,
         "Carbon_Intensity": carbon_int,
     }
@@ -275,18 +377,14 @@ def calculate_professional_scores(df):
     """حساب الدرجات الاحترافية مع الأوزان"""
     df_calc = df.copy()
     
-    # ========== Environmental Score (35%) ==========
+    # Environmental Score (35%)
     max_ghg = max(df_calc['GHG_Emissions'].max(), 1)
     df_calc['GHG_Score'] = (1 - (df_calc['GHG_Emissions'] / max_ghg)) * 100
-    
     df_calc['Renewable_Score'] = df_calc['Renewable_Energy'] * 5
     df_calc['Recycling_Score'] = df_calc['Recycling_Rate']
-    
     max_water = max(df_calc['Water_Intensity'].max(), 0.1)
     df_calc['Water_Score'] = (1 - (df_calc['Water_Intensity'] / max_water)) * 100
-    
     df_calc['Biodiversity_Score'] = df_calc['Biodiversity_Score']
-    
     max_methane = max(df_calc['Methane_Intensity'].max(), 0.01)
     df_calc['Methane_Score'] = (1 - (df_calc['Methane_Intensity'] / max_methane)) * 100
     
@@ -299,16 +397,13 @@ def calculate_professional_scores(df):
         df_calc['Methane_Score'] * 0.10
     )
     
-    # ========== Social Score (25%) ==========
+    # Social Score (25%)
     max_ltir = max(df_calc['Safety_LTIR'].max(), 0.1)
     df_calc['Safety_Score'] = (1 - (df_calc['Safety_LTIR'] / max_ltir)) * 100
-    
     max_events = max(df_calc['Process_Safety_Events'].max(), 1)
     df_calc['Safety_Events_Score'] = (1 - (df_calc['Process_Safety_Events'] / max_events)) * 100
-    
     max_training = max(df_calc['Training_Hours'].max(), 1)
     df_calc['Training_Score'] = (df_calc['Training_Hours'] / max_training) * 100
-    
     max_diversity = max(df_calc['Diversity_Rate'].max(), 1)
     df_calc['Diversity_Score'] = (df_calc['Diversity_Rate'] / max_diversity) * 100
     
@@ -319,13 +414,11 @@ def calculate_professional_scores(df):
         df_calc['Diversity_Score'] * 0.20
     )
     
-    # ========== Governance Score (20%) ==========
+    # Governance Score (20%)
     max_epi = max(df_calc['EPI_Score'].max(), 1)
     df_calc['EPI_Score_Norm'] = (df_calc['EPI_Score'] / max_epi) * 100
-    
     max_trans = max(df_calc['Transparency_Score'].max(), 1)
     df_calc['Transparency_Score_Norm'] = (df_calc['Transparency_Score'] / max_trans) * 100
-    
     max_risk = max(df_calc['Risk_Score'].max(), 1)
     df_calc['Risk_Score_Norm'] = (1 - (df_calc['Risk_Score'] / max_risk)) * 100
     
@@ -335,10 +428,9 @@ def calculate_professional_scores(df):
         df_calc['Risk_Score_Norm'] * 0.25
     )
     
-    # ========== Operational Score (20%) ==========
+    # Operational Score (20%)
     max_energy = max(df_calc['Energy_Efficiency'].max(), 1)
     df_calc['Energy_Score'] = (df_calc['Energy_Efficiency'] / max_energy) * 100
-    
     max_carbon = max(df_calc['Carbon_Intensity'].max(), 1)
     df_calc['Carbon_Intensity_Score'] = (1 - (df_calc['Carbon_Intensity'] / max_carbon)) * 100
     
@@ -347,7 +439,7 @@ def calculate_professional_scores(df):
         df_calc['Carbon_Intensity_Score'] * 0.50
     )
     
-    # ========== Overall Score (100%) ==========
+    # Overall Score
     df_calc['Overall_Score'] = (
         df_calc['Environmental_Score'] * 0.35 +
         df_calc['Social_Score'] * 0.25 +
@@ -364,7 +456,6 @@ def calculate_professional_scores(df):
 # -----------------------
 @st.cache_data
 def get_demo_data():
-    """بيانات تجريبية للعرض"""
     data = {
         "Company": ["ExxonMobil", "Saudi Aramco", "BP"],
         "GHG_Emissions": [112, 53.2, 63],
@@ -386,7 +477,7 @@ def get_demo_data():
     return pd.DataFrame(data)
 
 def process_uploaded_reports(files):
-    """معالجة التقارير المرفوعة واستخراج البيانات"""
+    """معالجة التقارير المرفوعة"""
     results = []
     company_names = ["ExxonMobil", "Saudi Aramco", "BP"]
     
@@ -397,8 +488,6 @@ def process_uploaded_reports(files):
                 data = extract_esg_metrics(text, company_names[i])
                 results.append(data)
             else:
-                st.warning(f"⚠️ Could not extract text from {company_names[i]} report. Using default values.")
-                # استخدام القيم الافتراضية
                 default_data = {
                     "Company": company_names[i],
                     "GHG_Emissions": 75 + i * 20,
@@ -419,7 +508,6 @@ def process_uploaded_reports(files):
                 }
                 results.append(default_data)
         else:
-            st.warning(f"⚠️ No file uploaded for {company_names[i]}. Using default values.")
             default_data = {
                 "Company": company_names[i],
                 "GHG_Emissions": 75 + i * 20,
@@ -444,10 +532,323 @@ def process_uploaded_reports(files):
     return calculate_professional_scores(df)
 
 # -----------------------
+# PDF EXPORT FUNCTIONS
+# -----------------------
+def save_fig_as_image(fig, width=600, height=400):
+    """حفظ الرسم البياني كصورة مؤقتة"""
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            fig.write_image(tmp.name, width=width, height=height, scale=1)
+            return tmp.name
+    except Exception as e:
+        return None
+
+def generate_pdf_report(df_calc, winner, runner):
+    """توليد تقرير PDF كامل"""
+    
+    filename = f"ESG_Benchmarking_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    doc = SimpleDocTemplate(filename, pagesize=A4, 
+                           rightMargin=72, leftMargin=72,
+                           topMargin=72, bottomMargin=72)
+    
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # عنوان التقرير
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], 
+                                 fontSize=24, textColor=colors.HexColor('#1B5E20'),
+                                 spaceAfter=30, alignment=1)
+    
+    story.append(Paragraph("🏆 Professional ESG Benchmarking Report", title_style))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("AI-Powered Analysis for ExxonMobil, Saudi Aramco & BP", styles['Heading2']))
+    story.append(Spacer(1, 24))
+    
+    # معلومات الفريق والمشرف
+    story.append(Paragraph("<b>Team Leader:</b> Ismail Kamal", styles['Normal']))
+    story.append(Paragraph("<b>Team Members:</b> Adel ElSayed, Mohamed Gaber, Ahmed Omar, Sherouk Ashraf, Mohamed ElHammadi, Farouk Sameh", styles['Normal']))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<b><font color='red'>Under Supervision:</font> Dr. Mohamed Tash</b>", styles['Normal']))
+    story.append(Paragraph("<b>QHSE Master at Alexandria University</b>", styles['Normal']))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+    story.append(Spacer(1, 30))
+    
+    # Winner Analysis
+    story.append(Paragraph("🏆 Winner Analysis", styles['Heading2']))
+    story.append(Spacer(1, 12))
+    
+    rating = "⭐ A+ (Excellent)" if winner['Overall_Score'] >= 85 else \
+             "⭐ A (Very Good)" if winner['Overall_Score'] >= 75 else \
+             "⭐ B+ (Good)" if winner['Overall_Score'] >= 65 else \
+             "⭐ B (Satisfactory)" if winner['Overall_Score'] >= 55 else \
+             "⭐ C (Needs Improvement)"
+    
+    winner_text = f"""
+    <b>Company:</b> {winner['Company']}<br/>
+    <b>Overall Score:</b> {winner['Overall_Score']:.1f}/100<br/>
+    <b>Rank:</b> #{int(winner['Rank'])}<br/>
+    <b>ESG Rating:</b> {rating}<br/><br/>
+    <b>Key Strengths:</b><br/>
+    • EPI Score: {winner['EPI_Score']:.1f}<br/>
+    • Recycling Rate: {winner['Recycling_Rate']:.1f}%<br/>
+    • Safety Performance: LTIR {winner['Safety_LTIR']:.2f}<br/>
+    • Renewable Energy: {winner['Renewable_Energy']:.1f}%
+    """
+    story.append(Paragraph(winner_text, styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    # Scores Table
+    story.append(Paragraph("📊 Detailed Scores", styles['Heading2']))
+    story.append(Spacer(1, 12))
+    
+    table_data = [
+        ['Company', 'Overall', 'Environmental', 'Social', 'Governance', 'Operational']
+    ]
+    
+    for idx, row in df_calc.iterrows():
+        table_data.append([
+            row['Company'],
+            f"{row['Overall_Score']:.1f}%",
+            f"{row['Environmental_Score']:.1f}%",
+            f"{row['Social_Score']:.1f}%",
+            f"{row['Governance_Score']:.1f}%",
+            f"{row['Operational_Score']:.1f}%"
+        ])
+    
+    table = Table(table_data, colWidths=[100, 70, 80, 70, 80, 80])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1B5E20')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 30))
+    
+    # Full Metrics Table
+    story.append(Paragraph("📋 Full Metrics Comparison", styles['Heading2']))
+    story.append(Spacer(1, 12))
+    
+    metrics_data = [
+        ['Metric', 'ExxonMobil', 'Saudi Aramco', 'BP']
+    ]
+    
+    metrics = [
+        ('GHG Emissions (M t)', 'GHG_Emissions'),
+        ('Renewable Energy (%)', 'Renewable_Energy'),
+        ('Recycling Rate (%)', 'Recycling_Rate'),
+        ('Water Intensity', 'Water_Intensity'),
+        ('Biodiversity Score', 'Biodiversity_Score'),
+        ('Methane Intensity', 'Methane_Intensity'),
+        ('Safety LTIR', 'Safety_LTIR'),
+        ('Process Safety Events', 'Process_Safety_Events'),
+        ('Training Hours', 'Training_Hours'),
+        ('Diversity Rate (%)', 'Diversity_Rate'),
+        ('EPI Score', 'EPI_Score'),
+        ('Transparency Score', 'Transparency_Score'),
+        ('Risk Score', 'Risk_Score'),
+        ('Energy Efficiency (%)', 'Energy_Efficiency'),
+        ('Carbon Intensity', 'Carbon_Intensity'),
+    ]
+    
+    for label, col in metrics:
+        row = [label]
+        for idx, row_data in df_calc.iterrows():
+            row.append(f"{row_data[col]:.1f}")
+        metrics_data.append(row)
+    
+    metrics_table = Table(metrics_data, colWidths=[80, 70, 70, 70])
+    metrics_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1B5E20')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F8FAFC')),
+    ]))
+    story.append(metrics_table)
+    story.append(Spacer(1, 30))
+    
+    # Runner-up Analysis
+    if runner is not None:
+        story.append(Paragraph("📈 Runner-Up Analysis", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        runner_text = f"""
+        <b>Company:</b> {runner['Company']}<br/>
+        <b>Overall Score:</b> {runner['Overall_Score']:.1f}/100<br/>
+        <b>Gap from Winner:</b> {winner['Overall_Score'] - runner['Overall_Score']:.1f} points<br/><br/>
+        <b>Areas for Improvement:</b><br/>
+        • Reduce GHG emissions by {(runner['GHG_Emissions'] - winner['GHG_Emissions']):.1f}M t<br/>
+        • Increase recycling by {(winner['Recycling_Rate'] - runner['Recycling_Rate']):.1f}%<br/>
+        • Improve safety to LTIR {winner['Safety_LTIR']:.2f}
+        """
+        story.append(Paragraph(runner_text, styles['Normal']))
+        story.append(Spacer(1, 30))
+    
+    # Footer
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("<hr/>", styles['Normal']))
+    story.append(Paragraph("<b>Professional ESG Benchmarking Platform</b>", styles['Normal']))
+    story.append(Paragraph("Developed by Ismail Kamal & Team | Under Supervision of Dr. Mohamed Tash", styles['Normal']))
+    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    
+    doc.build(story)
+    return filename
+
+def generate_pdf_with_charts(df_calc, winner, runner):
+    """توليد تقرير PDF مع الرسوم البيانية"""
+    try:
+        # إنشاء الرسوم البيانية
+        categories = ['Environmental_Score', 'Social_Score', 'Governance_Score', 'Operational_Score']
+        labels = ['Environmental', 'Social', 'Governance', 'Operational']
+        colors_plot = ['#2E7D32', '#1565C0', '#6A1B9A', '#F57C00']
+        
+        fig_radar = go.Figure()
+        for i, company in enumerate(df_calc['Company']):
+            values = df_calc[df_calc['Company'] == company][categories].values.flatten().tolist()
+            fig_radar.add_trace(go.Scatterpolar(
+                r=values,
+                theta=labels,
+                fill='toself',
+                name=company,
+                line_color=colors_plot[i % len(colors_plot)],
+                fillcolor=f'rgba({int(colors_plot[i % len(colors_plot)][1:3], 16)}, {int(colors_plot[i % len(colors_plot)][3:5], 16)}, {int(colors_plot[i % len(colors_plot)][5:7], 16)}, 0.2)'
+            ))
+        
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+            title="ESG Performance Radar Chart",
+            height=500,
+            showlegend=True
+        )
+        
+        fig_bar = go.Figure()
+        for i, company in enumerate(df_calc['Company']):
+            values = df_calc[df_calc['Company'] == company][categories].values.flatten().tolist()
+            fig_bar.add_trace(go.Bar(
+                name=company,
+                x=labels,
+                y=values,
+                marker_color=colors_plot[i % len(colors_plot)]
+            ))
+        
+        fig_bar.update_layout(
+            title="ESG Scores Comparison",
+            yaxis_title="Score (%)",
+            height=450,
+            barmode='group'
+        )
+        
+        # حفظ الصور
+        img_radar = save_fig_as_image(fig_radar)
+        img_bar = save_fig_as_image(fig_bar)
+        
+        if not img_radar or not img_bar:
+            return generate_pdf_report(df_calc, winner, runner)
+        
+        # إنشاء PDF مع الصور
+        filename = f"ESG_Benchmarking_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        doc = SimpleDocTemplate(filename, pagesize=A4)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], 
+                                     fontSize=24, textColor=colors.HexColor('#1B5E20'),
+                                     spaceAfter=30, alignment=1)
+        
+        story.append(Paragraph("🏆 Professional ESG Benchmarking Report", title_style))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("AI-Powered Analysis for ExxonMobil, Saudi Aramco & BP", styles['Heading2']))
+        story.append(Spacer(1, 24))
+        
+        story.append(Paragraph("<b>Team Leader:</b> Ismail Kamal", styles['Normal']))
+        story.append(Paragraph("<b>Team Members:</b> Adel ElSayed, Mohamed Gaber, Ahmed Omar, Sherouk Ashraf, Mohamed ElHammadi, Farouk Sameh", styles['Normal']))
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("<b><font color='red'>Under Supervision:</font> Dr. Mohamed Tash</b>", styles['Normal']))
+        story.append(Paragraph("<b>QHSE Master at Alexandria University</b>", styles['Normal']))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+        story.append(Spacer(1, 30))
+        
+        # Winner
+        story.append(Paragraph("🏆 Winner Analysis", styles['Heading2']))
+        rating = "⭐ A+ (Excellent)" if winner['Overall_Score'] >= 85 else \
+                 "⭐ A (Very Good)" if winner['Overall_Score'] >= 75 else \
+                 "⭐ B+ (Good)" if winner['Overall_Score'] >= 65 else \
+                 "⭐ B (Satisfactory)" if winner['Overall_Score'] >= 55 else \
+                 "⭐ C (Needs Improvement)"
+        
+        winner_text = f"""
+        <b>Company:</b> {winner['Company']}<br/>
+        <b>Overall Score:</b> {winner['Overall_Score']:.1f}/100<br/>
+        <b>Rank:</b> #{int(winner['Rank'])}<br/>
+        <b>ESG Rating:</b> {rating}<br/><br/>
+        <b>Key Strengths:</b><br/>
+        • EPI Score: {winner['EPI_Score']:.1f}<br/>
+        • Recycling Rate: {winner['Recycling_Rate']:.1f}%<br/>
+        • Safety Performance: LTIR {winner['Safety_LTIR']:.2f}<br/>
+        • Renewable Energy: {winner['Renewable_Energy']:.1f}%
+        """
+        story.append(Paragraph(winner_text, styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # إضافة الصور
+        story.append(Paragraph("📊 Performance Visualization", styles['Heading2']))
+        story.append(Spacer(1, 12))
+        
+        if img_radar:
+            story.append(RLImage(img_radar, width=400, height=280))
+            story.append(Spacer(1, 12))
+        
+        if img_bar:
+            story.append(RLImage(img_bar, width=400, height=280))
+            story.append(Spacer(1, 20))
+        
+        # Scores Table
+        story.append(Paragraph("📊 Detailed Scores", styles['Heading2']))
+        
+        table_data = [['Company', 'Overall', 'Environmental', 'Social', 'Governance', 'Operational']]
+        for idx, row in df_calc.iterrows():
+            table_data.append([
+                row['Company'],
+                f"{row['Overall_Score']:.1f}%",
+                f"{row['Environmental_Score']:.1f}%",
+                f"{row['Social_Score']:.1f}%",
+                f"{row['Governance_Score']:.1f}%",
+                f"{row['Operational_Score']:.1f}%"
+            ])
+        
+        table = Table(table_data, colWidths=[100, 70, 80, 70, 80, 80])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1B5E20')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 20))
+        
+        # Cleanup
+        if img_radar and os.path.exists(img_radar):
+            os.remove(img_radar)
+        if img_bar and os.path.exists(img_bar):
+            os.remove(img_bar)
+        
+        doc.build(story)
+        return filename
+        
+    except Exception as e:
+        return generate_pdf_report(df_calc, winner, runner)
+
+# -----------------------
 # DISPLAY FUNCTIONS
 # -----------------------
 def display_winner_analysis(df_calc):
-    """عرض تحليل الفائز بالتفصيل"""
     winner = df_calc.loc[df_calc['Overall_Score'].idxmax()]
     
     st.markdown("---")
@@ -488,7 +889,6 @@ def display_winner_analysis(df_calc):
         """, unsafe_allow_html=True)
 
 def display_company_cards(df_calc):
-    """عرض بطاقات الشركات"""
     st.subheader("📊 Company Rankings")
     df_sorted = df_calc.sort_values('Overall_Score', ascending=False).reset_index(drop=True)
     cols = st.columns(len(df_sorted))
@@ -517,19 +917,19 @@ def display_company_cards(df_calc):
                             <span>🌿 Environmental</span>
                             <span>{row['Environmental_Score']:.0f}%</span>
                         </div>
-                        <div class='progress-bar'><div class='fill' style='width: {row['Environmental_Score']}%;'></div></div>
+                        <div class='progress-bar'><div class='fill' style='width: {min(row['Environmental_Score'], 100)}%;'></div></div>
                         
                         <div style='display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px;'>
                             <span>👥 Social</span>
                             <span>{row['Social_Score']:.0f}%</span>
                         </div>
-                        <div class='progress-bar'><div class='fill' style='width: {row['Social_Score']}%;'></div></div>
+                        <div class='progress-bar'><div class='fill' style='width: {min(row['Social_Score'], 100)}%;'></div></div>
                         
                         <div style='display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px;'>
                             <span>🏛️ Governance</span>
                             <span>{row['Governance_Score']:.0f}%</span>
                         </div>
-                        <div class='progress-bar'><div class='fill' style='width: {row['Governance_Score']}%;'></div></div>
+                        <div class='progress-bar'><div class='fill' style='width: {min(row['Governance_Score'], 100)}%;'></div></div>
                     </div>
                     
                     <div style='margin-top: 12px;'>
@@ -541,7 +941,6 @@ def display_company_cards(df_calc):
             """, unsafe_allow_html=True)
 
 def display_detailed_comparison(df_calc):
-    """عرض جدول المقارنة التفصيلي"""
     st.subheader("📋 Detailed Comparison Table")
     
     display_cols = [
@@ -579,7 +978,6 @@ def display_detailed_comparison(df_calc):
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 def display_charts(df_calc):
-    """عرض الرسوم البيانية"""
     st.subheader("📈 Performance Visualization")
     
     categories = ['Environmental_Score', 'Social_Score', 'Governance_Score', 'Operational_Score']
@@ -631,7 +1029,6 @@ def display_charts(df_calc):
         st.plotly_chart(fig_bar, use_container_width=True)
 
 def display_predictive_insights(df_calc):
-    """عرض التوصيات والتنبؤات"""
     st.subheader("🔮 Predictive Insights & Recommendations")
     
     winner = df_calc.loc[df_calc['Overall_Score'].idxmax()]
@@ -731,17 +1128,41 @@ if st.session_state.analysis_done and st.session_state.results is not None:
     st.markdown("---")
     display_predictive_insights(df_calc)
     
+    # Export Section
     st.markdown("---")
-    st.markdown("## 📥 Export Report")
+    st.markdown("## 📥 Export Reports")
     
-    csv = df_calc.to_csv(index=False)
-    st.download_button(
-        label="📊 Download Results as CSV",
-        data=csv,
-        file_name=f"ESG_Benchmarking_Results_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # CSV Export
+        csv = df_calc.to_csv(index=False)
+        st.download_button(
+            label="📊 Download Results as CSV",
+            data=csv,
+            file_name=f"ESG_Benchmarking_Results_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    with col2:
+        # PDF Export
+        if st.button("📄 Download Full PDF Report (Print Ready)", use_container_width=True):
+            with st.spinner("Generating PDF report with all data and charts..."):
+                winner = df_calc.loc[df_calc['Overall_Score'].idxmax()]
+                runner = df_calc.loc[df_calc['Overall_Score'].idxmax() - 1] if len(df_calc) > 1 else None
+                
+                pdf_file = generate_pdf_with_charts(df_calc, winner, runner)
+                
+                with open(pdf_file, "rb") as f:
+                    st.download_button(
+                        label="✅ Click to Download PDF Report",
+                        data=f,
+                        file_name=pdf_file,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                st.success("✅ PDF Report generated successfully!")
 
 # -----------------------
 # FOOTER
