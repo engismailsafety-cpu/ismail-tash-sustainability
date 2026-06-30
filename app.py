@@ -8,6 +8,14 @@ from pypdf import PdfReader
 import re
 import io
 import os
+import tempfile
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as RLImage
+from reportlab.lib.units import inch, cm
+import plotly.io as pio
+import base64
 
 # -----------------------
 # PAGE CONFIG
@@ -232,7 +240,6 @@ def extract_text_from_pdf(file):
 def extract_esg_metrics(text, company_name):
     """استخراج مؤشرات ESG من النص"""
     
-    # دوال مساعدة
     def find_value(pattern, text, default=0):
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
@@ -305,102 +312,72 @@ def process_uploaded_reports(files, company_names):
                 data = extract_esg_metrics(text, company_names[i])
                 results.append(data)
             else:
-                # استخدام بيانات تجريبية إذا فشل الاستخراج
-                default_data = {
-                    "company": company_names[i],
-                    "industry": "Oil & Gas",
-                    "ghg_emissions": 50 + i * 20,
-                    "methane_intensity": 0.04 - i * 0.005,
-                    "flaring_intensity": 6.0 - i * 1.0,
-                    "energy_intensity": 170 + i * 5,
-                    "renewable_capacity": 0.5 + i * 0.3,
-                    "safety_ltir": 0.02 + i * 0.01,
-                    "total_recordable_rate": 0.15 + i * 0.02,
-                    "process_safety_events": 30 - i * 5,
-                    "water_consumption": 200 + i * 30,
-                    "recycling_rate": 50 + i * 5,
-                    "social_investment": 200 - i * 30,
-                    "female_representation": 25 + i * 3,
-                    "rnd_spend": 1000 + i * 100,
-                    "upstream_carbon_intensity": 10.0 - i * 0.5,
-                    "emissions_reduction": 10 + i * 5,
-                    "biodiversity_protection": 80 + i * 2,
-                    "employees": 70000 + i * 5000,
-                    "gas_production": 10.0 + i * 0.5,
-                    "oil_production": 10.0 - i * 1.0,
-                }
+                default_data = create_default_data(company_names[i], i)
                 results.append(default_data)
         else:
-            # استخدام بيانات تجريبية للملفات غير المرفوعة
-            default_data = {
-                "company": company_names[i],
-                "industry": "Oil & Gas",
-                "ghg_emissions": 50 + i * 20,
-                "methane_intensity": 0.04 - i * 0.005,
-                "flaring_intensity": 6.0 - i * 1.0,
-                "energy_intensity": 170 + i * 5,
-                "renewable_capacity": 0.5 + i * 0.3,
-                "safety_ltir": 0.02 + i * 0.01,
-                "total_recordable_rate": 0.15 + i * 0.02,
-                "process_safety_events": 30 - i * 5,
-                "water_consumption": 200 + i * 30,
-                "recycling_rate": 50 + i * 5,
-                "social_investment": 200 - i * 30,
-                "female_representation": 25 + i * 3,
-                "rnd_spend": 1000 + i * 100,
-                "upstream_carbon_intensity": 10.0 - i * 0.5,
-                "emissions_reduction": 10 + i * 5,
-                "biodiversity_protection": 80 + i * 2,
-                "employees": 70000 + i * 5000,
-                "gas_production": 10.0 + i * 0.5,
-                "oil_production": 10.0 - i * 1.0,
-            }
+            default_data = create_default_data(company_names[i], i)
             results.append(default_data)
     
     return pd.DataFrame(results)
+
+def create_default_data(company_name, index):
+    """إنشاء بيانات افتراضية للشركة"""
+    return {
+        "company": company_name,
+        "industry": "Oil & Gas",
+        "ghg_emissions": 50 + index * 20,
+        "methane_intensity": 0.04 - index * 0.005,
+        "flaring_intensity": 6.0 - index * 1.0,
+        "energy_intensity": 170 + index * 5,
+        "renewable_capacity": 0.5 + index * 0.3,
+        "safety_ltir": 0.02 + index * 0.01,
+        "total_recordable_rate": 0.15 + index * 0.02,
+        "process_safety_events": 30 - index * 5,
+        "water_consumption": 200 + index * 30,
+        "recycling_rate": 50 + index * 5,
+        "social_investment": 200 - index * 30,
+        "female_representation": 25 + index * 3,
+        "rnd_spend": 1000 + index * 100,
+        "upstream_carbon_intensity": 10.0 - index * 0.5,
+        "emissions_reduction": 10 + index * 5,
+        "biodiversity_protection": 80 + index * 2,
+        "employees": 70000 + index * 5000,
+        "gas_production": 10.0 + index * 0.5,
+        "oil_production": 10.0 - index * 1.0,
+    }
 
 def calculate_esg_scores(df):
     """حساب درجات ESG مع أوزان مخصصة"""
     df_calc = df.copy()
     
-    # ========== Environmental Score (40%) ==========
-    # 1. GHG Emissions (معكوس - الأقل أفضل)
+    # Environmental Score (40%)
     max_ghg = max(df_calc['ghg_emissions'].max(), 1)
     df_calc['ghg_score'] = (1 - (df_calc['ghg_emissions'] / max_ghg)) * 100
     
-    # 2. Methane Intensity (معكوس)
     max_methane = max(df_calc['methane_intensity'].max(), 0.01)
     df_calc['methane_score'] = (1 - (df_calc['methane_intensity'] / max_methane)) * 100
     
-    # 3. Flaring Intensity (معكوس)
     max_flaring = max(df_calc['flaring_intensity'].max(), 1)
     df_calc['flaring_score'] = (1 - (df_calc['flaring_intensity'] / max_flaring)) * 100
     
-    # 4. Renewable Capacity (مباشر)
     max_renewable = max(df_calc['renewable_capacity'].max(), 1)
     df_calc['renewable_score'] = (df_calc['renewable_capacity'] / max_renewable) * 100
     
-    # 5. Water Consumption (معكوس)
     max_water = max(df_calc['water_consumption'].max(), 1)
     df_calc['water_score'] = (1 - (df_calc['water_consumption'] / max_water)) * 100
     
-    # 6. Recycling Rate (مباشر)
     max_recycling = max(df_calc['recycling_rate'].max(), 1)
     df_calc['recycling_score'] = (df_calc['recycling_rate'] / max_recycling) * 100
     
-    # 7. Upstream Carbon Intensity (معكوس)
     max_carbon = max(df_calc['upstream_carbon_intensity'].max(), 1)
     df_calc['carbon_intensity_score'] = (1 - (df_calc['upstream_carbon_intensity'] / max_carbon)) * 100
     
-    # 8. Emissions Reduction (مباشر)
     max_reduction = max(df_calc['emissions_reduction'].max(), 1)
     df_calc['reduction_score'] = (df_calc['emissions_reduction'] / max_reduction) * 100
     
-    # 9. Biodiversity Protection (مباشر)
     max_biodiversity = max(df_calc['biodiversity_protection'].max(), 1)
     df_calc['biodiversity_score'] = (df_calc['biodiversity_protection'] / max_biodiversity) * 100
     
-    # Environmental Score
     df_calc['environmental_score'] = (
         df_calc['ghg_score'] * 0.20 +
         df_calc['methane_score'] * 0.15 +
@@ -413,32 +390,25 @@ def calculate_esg_scores(df):
         df_calc['biodiversity_score'] * 0.10
     )
     
-    # ========== Social Score (30%) ==========
-    # Safety LTIR (معكوس)
+    # Social Score (30%)
     max_ltir = max(df_calc['safety_ltir'].max(), 0.01)
     df_calc['safety_score'] = (1 - (df_calc['safety_ltir'] / max_ltir)) * 100
     
-    # Total Recordable Rate (معكوس)
     max_trir = max(df_calc['total_recordable_rate'].max(), 0.01)
     df_calc['trir_score'] = (1 - (df_calc['total_recordable_rate'] / max_trir)) * 100
     
-    # Process Safety Events (معكوس)
     max_events = max(df_calc['process_safety_events'].max(), 1)
     df_calc['safety_events_score'] = (1 - (df_calc['process_safety_events'] / max_events)) * 100
     
-    # Social Investment (مباشر)
     max_investment = max(df_calc['social_investment'].max(), 1)
     df_calc['investment_score'] = (df_calc['social_investment'] / max_investment) * 100
     
-    # Female Representation (مباشر)
     max_female = max(df_calc['female_representation'].max(), 1)
     df_calc['female_score'] = (df_calc['female_representation'] / max_female) * 100
     
-    # Employees (مباشر)
     max_employees = max(df_calc['employees'].max(), 1)
     df_calc['employees_score'] = (df_calc['employees'] / max_employees) * 100
     
-    # Social Score
     df_calc['social_score'] = (
         df_calc['safety_score'] * 0.25 +
         df_calc['trir_score'] * 0.15 +
@@ -448,27 +418,23 @@ def calculate_esg_scores(df):
         df_calc['employees_score'] * 0.10
     )
     
-    # ========== Governance Score (30%) ==========
-    # R&D Spend (مباشر)
+    # Governance Score (30%)
     max_rnd = max(df_calc['rnd_spend'].max(), 1)
     df_calc['rnd_score'] = (df_calc['rnd_spend'] / max_rnd) * 100
     
-    # Energy Intensity (معكوس)
     max_energy = max(df_calc['energy_intensity'].max(), 1)
     df_calc['energy_score'] = (1 - (df_calc['energy_intensity'] / max_energy)) * 100
     
-    # Gas Production (مباشر)
     max_gas = max(df_calc['gas_production'].max(), 1)
     df_calc['gas_score'] = (df_calc['gas_production'] / max_gas) * 100
     
-    # Governance Score
     df_calc['governance_score'] = (
         df_calc['rnd_score'] * 0.35 +
         df_calc['energy_score'] * 0.35 +
         df_calc['gas_score'] * 0.30
     )
     
-    # ========== Overall Score ==========
+    # Overall Score
     df_calc['overall_score'] = (
         df_calc['environmental_score'] * 0.40 +
         df_calc['social_score'] * 0.30 +
@@ -478,6 +444,311 @@ def calculate_esg_scores(df):
     df_calc['rank'] = df_calc['overall_score'].rank(ascending=False, method='dense').astype(int)
     
     return df_calc
+
+# -----------------------
+# GENERATE SMART INSIGHTS
+# -----------------------
+def generate_smart_insights(df_calc):
+    """توليد تحليلات ذكية (Smart Insights)"""
+    insights = []
+    
+    # تحديد الفائز
+    winner = df_calc.loc[df_calc['overall_score'].idxmax()]
+    sorted_df = df_calc.sort_values('overall_score', ascending=False)
+    runner = sorted_df.iloc[1] if len(sorted_df) > 1 else None
+    
+    # 1. تحليل الأداء العام
+    insights.append({
+        "category": "🏆 Overall Performance",
+        "insight": f"{winner['company']} achieves the highest ESG score ({winner['overall_score']:.1f}/100), outperforming competitors through balanced performance across all three pillars.",
+        "priority": "High"
+    })
+    
+    if runner is not None:
+        gap = winner['overall_score'] - runner['overall_score']
+        insights.append({
+            "category": "📊 Competitive Gap",
+            "insight": f"{runner['company']} is {gap:.1f} points behind the leader. The main differentiator is in the Environmental pillar.",
+            "priority": "Medium"
+        })
+    
+    # 2. تحليل البيئي
+    env_winner = df_calc.loc[df_calc['environmental_score'].idxmax()]
+    insights.append({
+        "category": "🌿 Environmental Leadership",
+        "insight": f"{env_winner['company']} leads in environmental performance with {env_winner['environmental_score']:.1f}%, driven by low GHG emissions and high recycling rates.",
+        "priority": "High"
+    })
+    
+    # 3. تحليل الاجتماعي
+    social_winner = df_calc.loc[df_calc['social_score'].idxmax()]
+    insights.append({
+        "category": "👥 Social Impact",
+        "insight": f"{social_winner['company']} demonstrates strong social responsibility with {social_winner['social_score']:.1f}%, particularly in safety performance and social investment.",
+        "priority": "Medium"
+    })
+    
+    # 4. تحليل الحوكمة
+    gov_winner = df_calc.loc[df_calc['governance_score'].idxmax()]
+    insights.append({
+        "category": "🏛️ Governance Excellence",
+        "insight": f"{gov_winner['company']} excels in governance with {gov_winner['governance_score']:.1f}%, reflecting strong R&D investment and energy efficiency.",
+        "priority": "Medium"
+    })
+    
+    # 5. تحليل الانبعاثات
+    lowest_ghg = df_calc.loc[df_calc['ghg_emissions'].idxmin()]
+    avg_ghg = df_calc['ghg_emissions'].mean()
+    insights.append({
+        "category": "🌍 GHG Emissions",
+        "insight": f"{lowest_ghg['company']} has the lowest GHG emissions ({lowest_ghg['ghg_emissions']:.1f}M tCO₂e), below the industry average of {avg_ghg:.1f}M tCO₂e.",
+        "priority": "High"
+    })
+    
+    # 6. تحليل السلامة
+    safest = df_calc.loc[df_calc['safety_ltir'].idxmin()]
+    insights.append({
+        "category": "🛡️ Safety Performance",
+        "insight": f"{safest['company']} achieves the best safety record with LTIR of {safest['safety_ltir']:.3f}, demonstrating strong safety culture and systems.",
+        "priority": "High"
+    })
+    
+    # 7. تحليل الاستثمار في R&D
+    top_rnd = df_calc.loc[df_calc['rnd_spend'].idxmax()]
+    insights.append({
+        "category": "💡 Innovation & R&D",
+        "insight": f"{top_rnd['company']} invests most heavily in R&D (${top_rnd['rnd_spend']:.0f}M), supporting long-term innovation and technology leadership.",
+        "priority": "Medium"
+    })
+    
+    # 8. تحليل التنوع
+    top_female = df_calc.loc[df_calc['female_representation'].idxmax()]
+    insights.append({
+        "category": "⚖️ Diversity & Inclusion",
+        "insight": f"{top_female['company']} leads in female representation ({top_female['female_representation']:.1f}%), exceeding industry average.",
+        "priority": "Medium"
+    })
+    
+    return insights
+
+def generate_strategic_recommendations(df_calc):
+    """توليد توصيات استراتيجية لكل شركة"""
+    recommendations = []
+    
+    for idx, row in df_calc.iterrows():
+        rec = {
+            "company": row['company'],
+            "recommendations": []
+        }
+        
+        # Environmental Recommendations
+        if row['environmental_score'] < 70:
+            rec['recommendations'].append({
+                "pillar": "🌿 Environmental",
+                "action": "Accelerate deployment of carbon capture and storage (CCS) technologies.",
+                "impact": "Reduce GHG emissions by 15-20% within 3 years",
+                "priority": "High"
+            })
+        if row['recycling_rate'] < 60:
+            rec['recommendations'].append({
+                "pillar": "♻️ Circular Economy",
+                "action": "Increase water recycling rate to 80%+ through investment in advanced treatment facilities.",
+                "impact": "Reduce freshwater withdrawal by 30%",
+                "priority": "High"
+            })
+        if row['renewable_capacity'] < 1.0:
+            rec['recommendations'].append({
+                "pillar": "⚡ Renewable Energy",
+                "action": "Expand renewable energy portfolio to 5GW+ by 2030.",
+                "impact": "Reduce operational carbon intensity by 25%",
+                "priority": "Medium"
+            })
+        
+        # Social Recommendations
+        if row['safety_ltir'] > 0.02:
+            rec['recommendations'].append({
+                "pillar": "🛡️ Safety",
+                "action": "Implement zero-incident safety culture program with AI-powered risk monitoring.",
+                "impact": "Achieve LTIR below 0.01",
+                "priority": "High"
+            })
+        if row['female_representation'] < 30:
+            rec['recommendations'].append({
+                "pillar": "👥 Diversity",
+                "action": "Launch women in leadership program targeting 35% representation by 2028.",
+                "impact": "Enhanced innovation and decision-making",
+                "priority": "Medium"
+            })
+        if row['social_investment'] < 200:
+            rec['recommendations'].append({
+                "pillar": "🏘️ Community",
+                "action": "Increase social investment to $250M+ focusing on education and community development.",
+                "impact": "Strengthened community relations and social license to operate",
+                "priority": "Medium"
+            })
+        
+        # Governance Recommendations
+        if row['rnd_spend'] < 1200:
+            rec['recommendations'].append({
+                "pillar": "🔬 Innovation",
+                "action": "Increase R&D spend to 1.5% of revenue with focus on low-carbon technologies.",
+                "impact": "Technology leadership and competitive advantage",
+                "priority": "High"
+            })
+        if row['energy_intensity'] > 170:
+            rec['recommendations'].append({
+                "pillar": "⚡ Energy Efficiency",
+                "action": "Implement AI-driven energy optimization across all operations.",
+                "impact": "15% reduction in energy intensity",
+                "priority": "Medium"
+            })
+        
+        recommendations.append(rec)
+    
+    return recommendations
+
+# -----------------------
+# GENERATE PDF REPORT
+# -----------------------
+def save_plotly_fig_as_image(fig, width=800, height=400):
+    """حفظ الرسم البياني من plotly كصورة مؤقتة"""
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            fig.write_image(tmp.name, width=width, height=height, scale=2)
+            return tmp.name
+    except Exception as e:
+        return None
+
+def generate_pdf_report(df_calc, insights, recommendations):
+    """توليد تقرير PDF شامل"""
+    
+    filename = f"ESG_Benchmarking_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    doc = SimpleDocTemplate(filename, pagesize=A4, 
+                           rightMargin=72, leftMargin=72,
+                           topMargin=72, bottomMargin=72)
+    
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Custom styles
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], 
+                                 fontSize=24, textColor=colors.HexColor('#1B5E20'),
+                                 spaceAfter=30, alignment=1)
+    heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], 
+                                   fontSize=16, textColor=colors.HexColor('#2E7D32'),
+                                   spaceAfter=12, spaceBefore=16)
+    subheading_style = ParagraphStyle('CustomSubheading', parent=styles['Heading3'],
+                                      fontSize=13, textColor=colors.HexColor('#0D47A1'),
+                                      spaceAfter=8, spaceBefore=10)
+    
+    # 1. Cover Page
+    story.append(Paragraph("🏆 Global Energy ESG Benchmarking Report", title_style))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("2025 Sustainability Analysis: Saudi Aramco · ExxonMobil · BP", styles['Heading2']))
+    story.append(Spacer(1, 36))
+    
+    story.append(Paragraph("<b>Team Leader:</b> Ismail Kamal", styles['Normal']))
+    story.append(Paragraph("<b>Team Members:</b> Adel ElSayed, Mohamed Gaber, Ahmed Omar, Sherouk Ashraf, Mohamed ElHammadi, Farouk Sameh", styles['Normal']))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("<b><font color='red'>Under Supervision: Dr. Mohamed Tash</font></b>", styles['Normal']))
+    story.append(Paragraph("<b>QHSE Master at Alexandria University</b>", styles['Normal']))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"<b>Report Date:</b> {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+    
+    # 2. Executive Summary
+    story.append(PageBreak())
+    story.append(Paragraph("📋 Executive Summary", heading_style))
+    
+    winner = df_calc.loc[df_calc['overall_score'].idxmax()]
+    summary_text = f"""
+    This comprehensive ESG benchmarking report analyzes the sustainability performance of three major energy companies: 
+    Saudi Aramco, ExxonMobil, and BP for the year 2025.
+    
+    <b>Key Findings:</b><br/>
+    • <b>Overall Winner:</b> {winner['company']} with an ESG score of {winner['overall_score']:.1f}/100<br/>
+    • <b>Environmental Leader:</b> {df_calc.loc[df_calc['environmental_score'].idxmax()]['company']}<br/>
+    • <b>Social Leader:</b> {df_calc.loc[df_calc['social_score'].idxmax()]['company']}<br/>
+    • <b>Governance Leader:</b> {df_calc.loc[df_calc['governance_score'].idxmax()]['company']}<br/>
+    """
+    story.append(Paragraph(summary_text, styles['Normal']))
+    
+    # 3. Scores Table
+    story.append(PageBreak())
+    story.append(Paragraph("📊 ESG Scores Summary", heading_style))
+    
+    table_data = [
+        ['Company', 'Environmental', 'Social', 'Governance', 'Overall', 'Rank']
+    ]
+    for idx, row in df_calc.iterrows():
+        table_data.append([
+            row['company'],
+            f"{row['environmental_score']:.1f}%",
+            f"{row['social_score']:.1f}%",
+            f"{row['governance_score']:.1f}%",
+            f"{row['overall_score']:.1f}%",
+            f"#{int(row['rank'])}"
+        ])
+    
+    table = Table(table_data, colWidths=[100, 80, 70, 80, 80, 50])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1B5E20')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+    ]))
+    story.append(table)
+    
+    # 4. Winner Analysis
+    story.append(PageBreak())
+    story.append(Paragraph("🏆 Winner Analysis: " + winner['company'], heading_style))
+    
+    winner_text = f"""
+    <b>Overall Score:</b> {winner['overall_score']:.1f}/100<br/>
+    <b>ESG Rating:</b> {'A+ (Excellent)' if winner['overall_score'] >= 85 else 'A (Very Good)' if winner['overall_score'] >= 75 else 'B+ (Good)'}<br/><br/>
+    <b>Key Strengths:</b><br/>
+    • Environmental Score: {winner['environmental_score']:.1f}%<br/>
+    • Social Score: {winner['social_score']:.1f}%<br/>
+    • Governance Score: {winner['governance_score']:.1f}%<br/>
+    • GHG Emissions: {winner['ghg_emissions']:.1f}M tCO₂e<br/>
+    • Recycling Rate: {winner['recycling_rate']:.1f}%<br/>
+    • Safety LTIR: {winner['safety_ltir']:.3f}
+    """
+    story.append(Paragraph(winner_text, styles['Normal']))
+    
+    # 5. Smart Insights
+    story.append(PageBreak())
+    story.append(Paragraph("🧠 Smart Insights & Analysis", heading_style))
+    
+    for insight in insights:
+        story.append(Paragraph(f"<b>{insight['category']}</b>", subheading_style))
+        story.append(Paragraph(insight['insight'], styles['Normal']))
+        story.append(Spacer(1, 6))
+        story.append(Paragraph(f"<i>Priority: {insight['priority']}</i>", styles['Normal']))
+        story.append(Spacer(1, 12))
+    
+    # 6. Strategic Recommendations
+    story.append(PageBreak())
+    story.append(Paragraph("💡 Strategic Recommendations", heading_style))
+    
+    for rec in recommendations:
+        story.append(Paragraph(f"<b>{rec['company']}</b>", subheading_style))
+        for action in rec['recommendations']:
+            story.append(Paragraph(f"{action['pillar']} - <b>{action['action']}</b>", styles['Normal']))
+            story.append(Paragraph(f"• Expected Impact: {action['impact']}", styles['Normal']))
+            story.append(Paragraph(f"• Priority: {action['priority']}", styles['Normal']))
+            story.append(Spacer(1, 6))
+        story.append(Spacer(1, 12))
+    
+    # 7. Footer
+    story.append(PageBreak())
+    story.append(Paragraph("<hr/>", styles['Normal']))
+    story.append(Paragraph("<b>Global Energy ESG Benchmarking 2025</b>", styles['Normal']))
+    story.append(Paragraph("Developed by Ismail Kamal & Team | Under Supervision of Dr. Mohamed Tash", styles['Normal']))
+    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    
+    doc.build(story)
+    return filename
 
 # -----------------------
 # DISPLAY FUNCTIONS
@@ -586,7 +857,6 @@ def display_charts(df_calc):
     labels = ['🌿 Environmental', '👥 Social', '🏛️ Governance']
     colors = ['#2E7D32', '#1565C0', '#6A1B9A']
     
-    # Radar Chart
     fig_radar = go.Figure()
     for i, company in enumerate(df_calc['company']):
         values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
@@ -607,7 +877,6 @@ def display_charts(df_calc):
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
     )
     
-    # Bar Chart
     fig_bar = go.Figure()
     for i, company in enumerate(df_calc['company']):
         values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
@@ -684,20 +953,13 @@ def display_detailed_comparison(df_calc):
     
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-def display_predictive_insights(df_calc):
-    """عرض التوصيات والتنبؤات - مع إصلاح خطأ KeyError"""
+def display_predictive_insights(df_calc, insights, recommendations):
+    """عرض التوصيات والتنبؤات"""
     st.subheader("🔮 Predictive Insights & Strategic Recommendations")
     
-    # الحصول على الفائز والوصيف بطريقة آمنة
-    winner_idx = df_calc['overall_score'].idxmax()
-    winner = df_calc.loc[winner_idx]
-    
-    # الحصول على الوصيف (ثاني أعلى درجة)
+    winner = df_calc.loc[df_calc['overall_score'].idxmax()]
     sorted_df = df_calc.sort_values('overall_score', ascending=False)
-    if len(sorted_df) > 1:
-        runner = sorted_df.iloc[1]
-    else:
-        runner = None
+    runner = sorted_df.iloc[1] if len(sorted_df) > 1 else None
     
     col1, col2 = st.columns(2)
     
@@ -734,46 +996,33 @@ def display_predictive_insights(df_calc):
                     </ul>
                 </div>
             """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-                <div class='warning-box'>
-                    <h4>📊 Only One Company Analyzed</h4>
-                    <p>Upload all three reports (ExxonMobil, Saudi Aramco, BP) for full comparison.</p>
+    
+    # Display Smart Insights
+    st.markdown("---")
+    st.subheader("🧠 Smart Insights")
+    for insight in insights:
+        st.markdown(f"""
+            <div style='background: #F0FDF4; border-radius: 10px; padding: 12px; margin: 8px 0; border-left: 4px solid #2E7D32;'>
+                <p><strong>{insight['category']}</strong></p>
+                <p>{insight['insight']}</p>
+                <p style='font-size: 12px; color: #64748b;'>Priority: {insight['priority']}</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    # Display Strategic Recommendations
+    st.markdown("---")
+    st.subheader("💡 Strategic Recommendations")
+    
+    for rec in recommendations:
+        st.markdown(f"### {rec['company']}")
+        for action in rec['recommendations']:
+            st.markdown(f"""
+                <div style='background: #F8FAFC; border-radius: 10px; padding: 12px; margin: 8px 0; border-left: 4px solid #0D47A1;'>
+                    <p><strong>{action['pillar']}</strong> - {action['action']}</p>
+                    <p style='font-size: 12px; color: #64748b;'>• Expected Impact: {action['impact']}</p>
+                    <p style='font-size: 12px; color: #64748b;'>• Priority: {action['priority']}</p>
                 </div>
             """, unsafe_allow_html=True)
-    
-    # Recommendations
-    st.markdown("""
-        <div style='background: #F8FAFC; border-radius: 16px; padding: 20px; margin-top: 15px; border: 1px solid #E2E8F0;'>
-            <h4>💡 Strategic Recommendations</h4>
-            <div style='display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;'>
-                <div>
-                    <strong>🌿 Environmental</strong>
-                    <ul>
-                        <li>Accelerate CCS deployment</li>
-                        <li>Increase renewable share</li>
-                        <li>Enhance water recycling</li>
-                    </ul>
-                </div>
-                <div>
-                    <strong>👥 Social</strong>
-                    <ul>
-                        <li>Improve diversity to 35%+</li>
-                        <li>Increase social investment</li>
-                        <li>Enhance safety culture</li>
-                    </ul>
-                </div>
-                <div>
-                    <strong>🏛️ Governance</strong>
-                    <ul>
-                        <li>Increase R&D investment</li>
-                        <li>Improve energy efficiency</li>
-                        <li>Expand gas portfolio</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
 
 # -----------------------
 # MAIN APP - UPLOAD SECTION
@@ -804,13 +1053,19 @@ if st.button("🚀 Run ESG Analysis", type="primary", use_container_width=True):
         company_names = ["ExxonMobil", "Saudi Aramco", "BP"]
         df = process_uploaded_reports(files, company_names)
         df_calc = calculate_esg_scores(df)
+        insights = generate_smart_insights(df_calc)
+        recommendations = generate_strategic_recommendations(df_calc)
         st.session_state.results = df_calc
+        st.session_state.insights = insights
+        st.session_state.recommendations = recommendations
         st.session_state.analysis_done = True
     st.success("✅ Analysis complete! Results displayed below.")
     st.balloons()
 
 if st.session_state.analysis_done and st.session_state.results is not None:
     df_calc = st.session_state.results
+    insights = st.session_state.insights
+    recommendations = st.session_state.recommendations
     
     # 1. Winner Analysis
     display_winner_analysis(df_calc)
@@ -827,22 +1082,39 @@ if st.session_state.analysis_done and st.session_state.results is not None:
     st.markdown("---")
     display_detailed_comparison(df_calc)
     
-    # 5. Predictive Insights
+    # 5. Smart Insights & Strategic Recommendations
     st.markdown("---")
-    display_predictive_insights(df_calc)
+    display_predictive_insights(df_calc, insights, recommendations)
     
     # 6. Export
     st.markdown("---")
     st.markdown("## 📥 Export Results")
     
-    csv = df_calc.to_csv(index=False)
-    st.download_button(
-        label="📊 Download ESG Analysis as CSV",
-        data=csv,
-        file_name=f"ESG_Benchmarking_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
-    )
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        csv = df_calc.to_csv(index=False)
+        st.download_button(
+            label="📊 Download ESG Analysis as CSV",
+            data=csv,
+            file_name=f"ESG_Benchmarking_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    with col2:
+        if st.button("📄 Download Full PDF Report", use_container_width=True, type="primary"):
+            with st.spinner("Generating comprehensive PDF report..."):
+                pdf_file = generate_pdf_report(df_calc, insights, recommendations)
+                with open(pdf_file, "rb") as f:
+                    st.download_button(
+                        label="✅ Click to Download PDF Report",
+                        data=f,
+                        file_name=pdf_file,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                st.success("✅ PDF Report generated successfully!")
 
 # -----------------------
 # FOOTER
