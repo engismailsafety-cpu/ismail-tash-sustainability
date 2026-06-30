@@ -1,5 +1,352 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
+
+# -----------------------
+# PAGE CONFIG
+# -----------------------
+st.set_page_config(
+    page_title="🌍 Global Energy ESG Benchmarking 2025",
+    page_icon="🏆",
+    layout="wide"
+)
+
+# -----------------------
+# CUSTOM CSS (مبسط وخالي من الأخطاء)
+# -----------------------
+st.markdown("""
+    <style>
+    .main-header {
+        background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%);
+        padding: 30px 20px;
+        border-radius: 20px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    .main-header h1 {
+        color: white;
+        margin: 0;
+        font-size: 32px;
+        font-weight: 700;
+    }
+    .main-header p {
+        color: #E8F5E9;
+        margin: 10px 0 0 0;
+    }
+    .company-card {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        border: 2px solid #E2E8F0;
+        margin: 10px 0;
+        text-align: center;
+        transition: all 0.3s;
+    }
+    .company-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    }
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 4px 0 10px 0;
+    }
+    .progress-fill {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.8s ease;
+    }
+    .winner-badge {
+        background: linear-gradient(135deg, #F59E0B, #D97706);
+        color: white;
+        padding: 4px 16px;
+        border-radius: 30px;
+        font-size: 12px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .team-member {
+        color: #E8F5E9;
+        font-size: 14px;
+    }
+    .team-leader {
+        color: #FFD54F;
+        font-weight: bold;
+        font-size: 16px;
+    }
+    .supervisor-name {
+        color: #FF0000;
+        font-weight: bold;
+        font-size: 20px;
+    }
+    .metric-card {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 12px;
+        text-align: center;
+        border-left: 4px solid #1B5E20;
+        margin: 5px 0;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# -----------------------
+# LOGIN SYSTEM
+# -----------------------
+users = {"admin": "1234", "ismail": "2024", "Dtash": "0000"}
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "analysis_done" not in st.session_state:
+    st.session_state.analysis_done = False
+if "results" not in st.session_state:
+    st.session_state.results = None
+
+if not st.session_state.logged_in:
+    st.markdown("""
+        <div class='main-header'>
+            <h1>🏆 Global Energy ESG Benchmarking 2025</h1>
+            <p>AI-Powered Analysis: Saudi Aramco · ExxonMobil · BP</p>
+            <p style='font-weight: bold; color: white; margin-top: 15px;'>
+                Team Leader: Ismail Kamal | Under Supervision: Dr. Mohamed Tash
+            </p>
+            <p style='font-size: 13px; color: #FFD54F;'>QHSE Master at Alexandria University</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    with st.container():
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 🔐 Login to Access Platform")
+            username = st.text_input("Username", placeholder="Enter your username")
+            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            
+            if st.button("Login", type="primary", use_container_width=True):
+                if username in users and users[username] == password:
+                    st.session_state.logged_in = True
+                    st.success("✅ Login successful!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password")
+    
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+            <div style='background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%); border-radius: 20px; padding: 20px;'>
+                <h3 style='text-align: center; background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%); color: white; padding: 12px; border-radius: 12px;'>👥 PROJECT TEAM</h3>
+                <table style='width: 100%; border-collapse: collapse;'>
+                    <tr style='background: #E8F5E9;'><th>Role</th><th>Name</th></tr>
+                    <tr style='background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%);'><td><b>🏆 Team Leader</b></td><td style='color: #D32F2F; font-weight: bold;'>Ismail Kamal</td></tr>
+                    <tr><td>📋 Team Member</td><td style='color: #1565C0;'>Adel ElSayed</td></tr>
+                    <tr><td>📋 Team Member</td><td style='color: #1565C0;'>Mohamed Gaber</td></tr>
+                    <tr><td>📋 Team Member</td><td style='color: #1565C0;'>Ahmed Omar</td></tr>
+                    <tr><td>📋 Team Member</td><td style='color: #1565C0;'>Sherouk Ashraf</td></tr>
+                    <tr><td>📋 Team Member</td><td style='color: #1565C0;'>Mohamed ElHammadi</td></tr>
+                    <tr><td>📋 Team Member</td><td style='color: #1565C0;'>Farouk Sameh</td></tr>
+                </table>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+            <div style='background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%); padding: 30px; border-radius: 20px; text-align: center;'>
+                <h3 style='color: #FFD54F; margin: 0;'>🎓 Under Supervision of</h3>
+                <h1 style='color: #FF0000; font-weight: bold; font-size: 36px; margin: 15px 0;'>Dr. Mohamed Tash</h1>
+                <p style='font-size: 18px; color: white; font-weight: bold;'>QHSE Master at Alexandria University</p>
+                <p style='font-size: 14px; color: #E8F5E9;'>Professor of Sustainability & ESG</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.caption("© 2025 Global Energy ESG Benchmarking Platform")
+    st.stop()
+
+# -----------------------
+# MAIN HEADER
+# -----------------------
+st.markdown("""
+    <div class='main-header'>
+        <h1>🏆 Global Energy ESG Benchmarking 2025</h1>
+        <p>AI-Powered Analysis: Saudi Aramco · ExxonMobil · BP</p>
+        <p style='font-weight: bold; color: white; margin-top: 15px;'>
+            Team Leader: Ismail Kamal | Under Supervision: Dr. Mohamed Tash
+        </p>
+        <p style='font-size: 13px; color: #FFD54F;'>QHSE Master at Alexandria University</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# -----------------------
+# SIDEBAR
+# -----------------------
+with st.sidebar:
+    st.markdown("<div style='text-align: center; font-size: 50px;'>🏆</div>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style='background: linear-gradient(135deg, #0D47A1 0%, #1B5E20 100%); border-radius: 15px; padding: 15px;'>
+            <h4 style='color: #FFD54F; text-align: center;'>👥 PROJECT TEAM</h4>
+            <p class='team-leader'>🏆 Ismail Kamal <span style='color: #E8F5E9; font-weight: normal;'>(Leader)</span></p>
+            <p class='team-member'>• Adel ElSayed</p>
+            <p class='team-member'>• Mohamed Gaber</p>
+            <p class='team-member'>• Ahmed Omar</p>
+            <p class='team-member'>• Sherouk Ashraf</p>
+            <p class='team-member'>• Mohamed ElHammadi</p>
+            <p class='team-member'>• Farouk Sameh</p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("""
+        <div style='background: linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%); border-radius: 15px; padding: 15px; text-align: center;'>
+            <h4 style='color: #2E7D32;'>🎓 SUPERVISOR</h4>
+            <p class='supervisor-name'>Dr. Mohamed Tash</p>
+            <p style='color: #2E7D32; font-weight: bold;'>QHSE Master at Alexandria University</p>
+        </div>
+    """, unsafe_allow_html=True)
+    st.markdown("---")
+    st.caption("Version 10.0 | ESG Benchmarking")
+
+# -----------------------
+# DATA
+# -----------------------
+@st.cache_data
+def get_company_data():
+    """بيانات مستخرجة من تقارير 2025 للشركات الثلاث"""
+    
+    data = {
+        "company": ["ExxonMobil", "Saudi Aramco", "BP"],
+        "ghg_emissions": [34.3, 58.0, 34.3],
+        "methane_intensity": [0.04, 0.04, 0.04],
+        "flaring_intensity": [2.5, 6.65, 4.5],
+        "energy_intensity": [180, 164.3, 175],
+        "renewable_capacity": [0.5, 1.28, 1.0],
+        "safety_ltir": [0.02, 0.011, 0.25],
+        "total_recordable_rate": [0.17, 0.028, 0.20],
+        "process_safety_events": [61, 9, 27],
+        "water_consumption": [330, 78.5, 250],
+        "recycling_rate": [40, 69.1, 55],
+        "social_investment": [200, 541, 64],
+        "female_representation": [28, 8.2, 35],
+        "rnd_spend": [1200, 1451, 900],
+        "upstream_carbon_intensity": [9.5, 10.0, 8.5],
+        "emissions_reduction": [25, 0, 37],
+        "biodiversity_protection": [85, 96.5, 80],
+        "employees": [61000, 76664, 93700],
+        "gas_production": [10.0, 11.4, 9.0],
+        "oil_production": [4.5, 10.7, 3.5]
+    }
+    return pd.DataFrame(data)
+
+def calculate_esg_scores(df):
+    """حساب درجات ESG مع أوزان مخصصة"""
+    df_calc = df.copy()
+    
+    # Environmental Score (40%)
+    max_ghg = max(df_calc['ghg_emissions'].max(), 1)
+    df_calc['ghg_score'] = (1 - (df_calc['ghg_emissions'] / max_ghg)) * 100
+    
+    max_methane = max(df_calc['methane_intensity'].max(), 0.01)
+    df_calc['methane_score'] = (1 - (df_calc['methane_intensity'] / max_methane)) * 100
+    
+    max_flaring = max(df_calc['flaring_intensity'].max(), 1)
+    df_calc['flaring_score'] = (1 - (df_calc['flaring_intensity'] / max_flaring)) * 100
+    
+    max_renewable = max(df_calc['renewable_capacity'].max(), 1)
+    df_calc['renewable_score'] = (df_calc['renewable_capacity'] / max_renewable) * 100
+    
+    max_water = max(df_calc['water_consumption'].max(), 1)
+    df_calc['water_score'] = (1 - (df_calc['water_consumption'] / max_water)) * 100
+    
+    max_recycling = max(df_calc['recycling_rate'].max(), 1)
+    df_calc['recycling_score'] = (df_calc['recycling_rate'] / max_recycling) * 100
+    
+    max_carbon = max(df_calc['upstream_carbon_intensity'].max(), 1)
+    df_calc['carbon_intensity_score'] = (1 - (df_calc['upstream_carbon_intensity'] / max_carbon)) * 100
+    
+    max_reduction = max(df_calc['emissions_reduction'].max(), 1)
+    df_calc['reduction_score'] = (df_calc['emissions_reduction'] / max_reduction) * 100
+    
+    max_biodiversity = max(df_calc['biodiversity_protection'].max(), 1)
+    df_calc['biodiversity_score'] = (df_calc['biodiversity_protection'] / max_biodiversity) * 100
+    
+    df_calc['environmental_score'] = (
+        df_calc['ghg_score'] * 0.20 +
+        df_calc['methane_score'] * 0.15 +
+        df_calc['flaring_score'] * 0.05 +
+        df_calc['renewable_score'] * 0.10 +
+        df_calc['water_score'] * 0.10 +
+        df_calc['recycling_score'] * 0.10 +
+        df_calc['carbon_intensity_score'] * 0.10 +
+        df_calc['reduction_score'] * 0.10 +
+        df_calc['biodiversity_score'] * 0.10
+    )
+    
+    # Social Score (30%)
+    max_ltir = max(df_calc['safety_ltir'].max(), 0.01)
+    df_calc['safety_score'] = (1 - (df_calc['safety_ltir'] / max_ltir)) * 100
+    
+    max_trir = max(df_calc['total_recordable_rate'].max(), 0.01)
+    df_calc['trir_score'] = (1 - (df_calc['total_recordable_rate'] / max_trir)) * 100
+    
+    max_events = max(df_calc['process_safety_events'].max(), 1)
+    df_calc['safety_events_score'] = (1 - (df_calc['process_safety_events'] / max_events)) * 100
+    
+    max_investment = max(df_calc['social_investment'].max(), 1)
+    df_calc['investment_score'] = (df_calc['social_investment'] / max_investment) * 100
+    
+    max_female = max(df_calc['female_representation'].max(), 1)
+    df_calc['female_score'] = (df_calc['female_representation'] / max_female) * 100
+    
+    max_employees = max(df_calc['employees'].max(), 1)
+    df_calc['employees_score'] = (df_calc['employees'] / max_employees) * 100
+    
+    df_calc['social_score'] = (
+        df_calc['safety_score'] * 0.25 +
+        df_calc['trir_score'] * 0.15 +
+        df_calc['safety_events_score'] * 0.15 +
+        df_calc['investment_score'] * 0.20 +
+        df_calc['female_score'] * 0.15 +
+        df_calc['employees_score'] * 0.10
+    )
+    
+    # Governance Score (30%)
+    max_rnd = max(df_calc['rnd_spend'].max(), 1)
+    df_calc['rnd_score'] = (df_calc['rnd_spend'] / max_rnd) * 100
+    
+    max_energy = max(df_calc['energy_intensity'].max(), 1)
+    df_calc['energy_score'] = (1 - (df_calc['energy_intensity'] / max_energy)) * 100
+    
+    max_gas = max(df_calc['gas_production'].max(), 1)
+    df_calc['gas_score'] = (df_calc['gas_production'] / max_gas) * 100
+    
+    df_calc['governance_score'] = (
+        df_calc['rnd_score'] * 0.35 +
+        df_calc['energy_score'] * 0.35 +
+        df_calc['gas_score'] * 0.30
+    )
+    
+    # Overall Score
+    df_calc['overall_score'] = (
+        df_calc['environmental_score'] * 0.40 +
+        df_calc['social_score'] * 0.30 +
+        df_calc['governance_score'] * 0.30
+    )
+    
+    df_calc['rank'] = df_calc['overall_score'].rank(ascending=False, method='dense').astype(int)
+    
+    return df_calc
+
+# -----------------------
+# DISPLAY FUNCTIONS
+# -----------------------
 def display_winner_analysis(df_calc):
-    """عرض تحليل الفائز بشكل احترافي"""
+    """عرض تحليل الفائز"""
     winner = df_calc.loc[df_calc['overall_score'].idxmax()]
     
     st.markdown("---")
@@ -16,54 +363,35 @@ def display_winner_analysis(df_calc):
     with col1:
         st.markdown(f"""
             <div style='background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%); 
-                        border-radius: 20px; padding: 30px; border: 3px solid #F59E0B;
-                        box-shadow: 0 8px 30px rgba(245,158,11,0.2);'>
-                <div style='display: flex; align-items: center; gap: 15px;'>
-                    <span style='font-size: 48px;'>🏆</span>
-                    <div>
-                        <h1 style='color: #92400E; margin: 0; font-size: 32px;'>{winner['company']}</h1>
-                        <p style='color: #78350F; margin: 5px 0 0 0; font-size: 16px;'>
-                            <strong>🏅 Rank:</strong> #{int(winner['rank'])} | 
-                            <strong>📊 ESG Rating:</strong> {rating}
-                        </p>
-                    </div>
-                </div>
-                <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px;'>
-                    <div style='background: rgba(255,255,255,0.5); padding: 15px; border-radius: 12px; text-align: center;'>
-                        <div style='font-size: 28px; font-weight: 700; color: #2E7D32;'>{winner['environmental_score']:.0f}%</div>
-                        <div style='font-size: 13px; color: #78350F;'>🌿 Environmental</div>
-                    </div>
-                    <div style='background: rgba(255,255,255,0.5); padding: 15px; border-radius: 12px; text-align: center;'>
-                        <div style='font-size: 28px; font-weight: 700; color: #1565C0;'>{winner['social_score']:.0f}%</div>
-                        <div style='font-size: 13px; color: #78350F;'>👥 Social</div>
-                    </div>
-                    <div style='background: rgba(255,255,255,0.5); padding: 15px; border-radius: 12px; text-align: center;'>
-                        <div style='font-size: 28px; font-weight: 700; color: #6A1B9A;'>{winner['governance_score']:.0f}%</div>
-                        <div style='font-size: 13px; color: #78350F;'>🏛️ Governance</div>
-                    </div>
-                </div>
-                <div style='margin-top: 15px; font-size: 14px; color: #78350F;'>
-                    <strong>Overall Score:</strong> {winner['overall_score']:.1f}/100
-                </div>
+                        border-radius: 20px; padding: 25px; border: 3px solid #F59E0B;'>
+                <h1 style='color: #92400E; margin: 0;'>{winner['company']}</h1>
+                <h2 style='color: #78350F;'>Overall Score: {winner['overall_score']:.1f}/100</h2>
+                <p style='font-size: 16px; color: #78350F;'>
+                    <strong>Rank:</strong> #{int(winner['rank'])} | 
+                    <strong>ESG Rating:</strong> {rating}
+                </p>
+                <p><strong>🌿 Environmental:</strong> {winner['environmental_score']:.1f}/100</p>
+                <p><strong>👥 Social:</strong> {winner['social_score']:.1f}/100</p>
+                <p><strong>🏛️ Governance:</strong> {winner['governance_score']:.1f}/100</p>
             </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown(f"""
-            <div style='background: #F8FAFC; border-radius: 20px; padding: 25px; text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: center;'>
-                <h3 style='color: #1e293b; margin-top: 0;'>💪 Key Strengths</h3>
-                <ul style='list-style: none; padding: 0; margin: 0; text-align: left;'>
-                    <li style='padding: 8px 0; border-bottom: 1px solid #e2e8f0;'>✅ GHG Emissions: <strong>{winner['ghg_emissions']:.1f}M t</strong></li>
-                    <li style='padding: 8px 0; border-bottom: 1px solid #e2e8f0;'>✅ Methane Intensity: <strong>{winner['methane_intensity']:.2f}%</strong></li>
-                    <li style='padding: 8px 0; border-bottom: 1px solid #e2e8f0;'>✅ Recycling Rate: <strong>{winner['recycling_rate']:.1f}%</strong></li>
-                    <li style='padding: 8px 0; border-bottom: 1px solid #e2e8f0;'>✅ Safety LTIR: <strong>{winner['safety_ltir']:.3f}</strong></li>
-                    <li style='padding: 8px 0;'>✅ R&D Spend: <strong>${winner['rnd_spend']:.0f}M</strong></li>
+            <div style='background: #F8FAFC; border-radius: 20px; padding: 20px; text-align: center;'>
+                <h3>💪 Key Strengths</h3>
+                <ul style='list-style: none; padding: 0;'>
+                    <li>✅ GHG: {winner['ghg_emissions']:.1f}M t</li>
+                    <li>✅ Methane: {winner['methane_intensity']:.2f}%</li>
+                    <li>✅ Recycling: {winner['recycling_rate']:.1f}%</li>
+                    <li>✅ Safety LTIR: {winner['safety_ltir']:.3f}</li>
+                    <li>✅ R&D: ${winner['rnd_spend']:.0f}M</li>
                 </ul>
             </div>
         """, unsafe_allow_html=True)
 
 def display_company_cards(df_calc):
-    """عرض بطاقات الشركات بشكل احترافي"""
+    """عرض بطاقات الشركات"""
     st.subheader("📊 Company Rankings")
     df_sorted = df_calc.sort_values('overall_score', ascending=False).reset_index(drop=True)
     
@@ -78,66 +406,274 @@ def display_company_cards(df_calc):
             border_color = medal_colors[i] if i < 3 else '#475569'
             
             st.markdown(f"""
-                <div style='
-                    background: white;
-                    border-radius: 20px;
-                    padding: 25px 20px 20px 20px;
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-                    border: 2px solid {border_color};
-                    margin: 10px 5px;
-                    transition: all 0.3s;
-                    text-align: center;
-                    height: 100%;
-                '>
-                    <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
+                <div class='company-card' style='border: 2px solid {border_color};'>
+                    <div style='display: flex; justify-content: space-between; align-items: center;'>
                         <span style='font-size: 28px;'>{medal_icons[i]}</span>
-                        {'<span style="background: linear-gradient(135deg, #F59E0B, #D97706); color: white; padding: 4px 16px; border-radius: 30px; font-size: 12px; font-weight: 600; display: inline-block;">🏆 Winner</span>' if is_winner else ''}
+                        {'<span class="winner-badge">🏆 Winner</span>' if is_winner else f'<span style="color: #64748b;">#{row["rank"]}</span>'}
                     </div>
-                    
-                    <h3 style='margin: 10px 0 5px 0; font-size: 20px; color: #1e293b;'>{row['company']}</h3>
-                    
-                    <div style='font-size: 36px; font-weight: 700; color: {border_color}; margin: 10px 0;'>{row['overall_score']:.1f}</div>
-                    <div style='font-size: 14px; color: #64748b; margin-bottom: 15px;'>Overall ESG Score</div>
+                    <h3 style='margin: 10px 0 5px 0;'>{row['company']}</h3>
+                    <div style='font-size: 36px; font-weight: 700; color: {border_color};'>{row['overall_score']:.1f}</div>
+                    <div style='font-size: 14px; color: #64748b;'>Overall ESG Score</div>
                     
                     <div style='margin: 15px 0;'>
-                        <div style='display: flex; justify-content: space-between; font-size: 13px; color: #334155;'>
+                        <div style='display: flex; justify-content: space-between; font-size: 13px;'>
                             <span>🌿 Environmental</span>
-                            <span style='font-weight: 600;'>{row['environmental_score']:.0f}%</span>
+                            <span>{row['environmental_score']:.0f}%</span>
                         </div>
-                        <div style='width: 100%; height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin: 4px 0 10px 0;'>
-                            <div style='width: {min(row['environmental_score'], 100)}%; height: 100%; background: linear-gradient(90deg, #2E7D32, #4CAF50); border-radius: 10px;'></div>
+                        <div class='progress-bar'>
+                            <div class='progress-fill' style='width: {min(row['environmental_score'], 100)}%; background: linear-gradient(90deg, #2E7D32, #4CAF50);'></div>
                         </div>
                         
-                        <div style='display: flex; justify-content: space-between; font-size: 13px; color: #334155;'>
+                        <div style='display: flex; justify-content: space-between; font-size: 13px;'>
                             <span>👥 Social</span>
-                            <span style='font-weight: 600;'>{row['social_score']:.0f}%</span>
+                            <span>{row['social_score']:.0f}%</span>
                         </div>
-                        <div style='width: 100%; height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin: 4px 0 10px 0;'>
-                            <div style='width: {min(row['social_score'], 100)}%; height: 100%; background: linear-gradient(90deg, #1565C0, #42A5F5); border-radius: 10px;'></div>
+                        <div class='progress-bar'>
+                            <div class='progress-fill' style='width: {min(row['social_score'], 100)}%; background: linear-gradient(90deg, #1565C0, #42A5F5);'></div>
                         </div>
                         
-                        <div style='display: flex; justify-content: space-between; font-size: 13px; color: #334155;'>
+                        <div style='display: flex; justify-content: space-between; font-size: 13px;'>
                             <span>🏛️ Governance</span>
-                            <span style='font-weight: 600;'>{row['governance_score']:.0f}%</span>
+                            <span>{row['governance_score']:.0f}%</span>
                         </div>
-                        <div style='width: 100%; height: 8px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin: 4px 0 10px 0;'>
-                            <div style='width: {min(row['governance_score'], 100)}%; height: 100%; background: linear-gradient(90deg, #6A1B9A, #AB47BC); border-radius: 10px;'></div>
+                        <div class='progress-bar'>
+                            <div class='progress-fill' style='width: {min(row['governance_score'], 100)}%; background: linear-gradient(90deg, #6A1B9A, #AB47BC);'></div>
                         </div>
                     </div>
                     
-                    <div style='display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px;'>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px; color: #334155;'>
+                    <div style='display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 10px;'>
+                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>
                             🌿 GHG: {row['ghg_emissions']:.1f}M
                         </span>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px; color: #334155;'>
+                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>
                             ♻️ Recycle: {row['recycling_rate']:.0f}%
                         </span>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px; color: #334155;'>
+                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>
                             ⚡ Carbon: {row['upstream_carbon_intensity']:.1f}kg
-                        </span>
-                        <span style='background: #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 12px; color: #334155;'>
-                            🛡️ Safety: {row['safety_ltir']:.3f}
                         </span>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
+
+def display_charts(df_calc):
+    """عرض الرسوم البيانية"""
+    st.subheader("📈 ESG Performance Visualization")
+    
+    categories = ['environmental_score', 'social_score', 'governance_score']
+    labels = ['🌿 Environmental', '👥 Social', '🏛️ Governance']
+    colors = ['#2E7D32', '#1565C0', '#6A1B9A']
+    
+    # Radar Chart
+    fig_radar = go.Figure()
+    for i, company in enumerate(df_calc['company']):
+        values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
+        fig_radar.add_trace(go.Scatterpolar(
+            r=values,
+            theta=labels,
+            fill='toself',
+            name=company,
+            line_color=colors[i % len(colors)]
+        ))
+    
+    fig_radar.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        title="ESG Performance Radar Chart",
+        height=500,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    
+    # Bar Chart
+    fig_bar = go.Figure()
+    for i, company in enumerate(df_calc['company']):
+        values = df_calc[df_calc['company'] == company][categories].values.flatten().tolist()
+        fig_bar.add_trace(go.Bar(
+            name=company,
+            x=labels,
+            y=values,
+            marker_color=colors[i % len(colors)]
+        ))
+    
+    fig_bar.update_layout(
+        title="ESG Scores Comparison",
+        yaxis_title="Score (%)",
+        height=450,
+        barmode='group',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(fig_radar, use_container_width=True)
+    with col2:
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+def display_detailed_comparison(df_calc):
+    """عرض جدول المقارنة"""
+    st.subheader("📋 Detailed ESG Comparison Table")
+    
+    display_cols = [
+        'company', 'rank',
+        'ghg_emissions', 'methane_intensity', 'recycling_rate',
+        'safety_ltir', 'female_representation', 'rnd_spend',
+        'environmental_score', 'social_score', 'governance_score', 'overall_score'
+    ]
+    
+    df_display = df_calc[display_cols].copy()
+    
+    format_dict = {
+        'ghg_emissions': '{:.1f}M',
+        'methane_intensity': '{:.2f}%',
+        'recycling_rate': '{:.1f}%',
+        'safety_ltir': '{:.3f}',
+        'female_representation': '{:.1f}%',
+        'rnd_spend': '${:.0f}M',
+        'environmental_score': '{:.1f}%',
+        'social_score': '{:.1f}%',
+        'governance_score': '{:.1f}%',
+        'overall_score': '{:.1f}%'
+    }
+    
+    for col, fmt in format_dict.items():
+        if col in df_display.columns:
+            df_display[col] = df_display[col].apply(lambda x: fmt.format(x))
+    
+    df_display.columns = [
+        'Company', 'Rank',
+        'GHG (M tCO₂e)', 'Methane (%)', 'Recycling (%)',
+        'Safety LTIR', 'Women (%)', 'R&D ($M)',
+        'Environmental', 'Social', 'Governance', 'Overall'
+    ]
+    
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+def generate_smart_insights(df_calc):
+    """توليد تحليلات ذكية"""
+    insights = []
+    
+    winner = df_calc.loc[df_calc['overall_score'].idxmax()]
+    sorted_df = df_calc.sort_values('overall_score', ascending=False)
+    runner = sorted_df.iloc[1] if len(sorted_df) > 1 else None
+    
+    insights.append({
+        "category": "🏆 Overall Performance",
+        "insight": f"{winner['company']} achieves the highest ESG score ({winner['overall_score']:.1f}/100), leading in Environmental and Governance pillars.",
+        "priority": "High"
+    })
+    
+    if runner is not None:
+        gap = winner['overall_score'] - runner['overall_score']
+        insights.append({
+            "category": "📊 Competitive Gap",
+            "insight": f"{runner['company']} is {gap:.1f} points behind. The main gap is in Environmental performance.",
+            "priority": "Medium"
+        })
+    
+    return insights
+
+def display_predictive_insights(df_calc, insights):
+    """عرض التوصيات"""
+    st.subheader("🔮 Predictive Insights & Recommendations")
+    
+    winner = df_calc.loc[df_calc['overall_score'].idxmax()]
+    sorted_df = df_calc.sort_values('overall_score', ascending=False)
+    runner = sorted_df.iloc[1] if len(sorted_df) > 1 else None
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown(f"""
+            <div style='background: #F0FDF4; border-radius: 16px; padding: 20px; border-left: 6px solid #1B5E20;'>
+                <h4>📊 Winner: {winner['company']}</h4>
+                <p><strong>Overall Score:</strong> {winner['overall_score']:.1f}/100</p>
+                <p><strong>🌿 Environmental:</strong> {winner['environmental_score']:.1f}%</p>
+                <p><strong>👥 Social:</strong> {winner['social_score']:.1f}%</p>
+                <p><strong>🏛️ Governance:</strong> {winner['governance_score']:.1f}%</p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        if runner is not None:
+            st.markdown(f"""
+                <div style='background: #FEF3C7; border-radius: 16px; padding: 20px; border-left: 6px solid #F59E0B;'>
+                    <h4>📈 Runner-Up: {runner['company']}</h4>
+                    <p><strong>Overall Score:</strong> {runner['overall_score']:.1f}/100</p>
+                    <p><strong>Gap:</strong> {winner['overall_score'] - runner['overall_score']:.1f} points</p>
+                </div>
+            """, unsafe_allow_html=True)
+    
+    # Smart Insights
+    st.markdown("---")
+    st.subheader("🧠 Smart Insights")
+    for insight in insights:
+        st.markdown(f"""
+            <div style='background: #F0FDF4; border-radius: 10px; padding: 12px; margin: 8px 0; border-left: 4px solid #2E7D32;'>
+                <p><strong>{insight['category']}</strong></p>
+                <p>{insight['insight']}</p>
+                <p style='font-size: 12px; color: #64748b;'>Priority: {insight['priority']}</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+# -----------------------
+# MAIN APP
+# -----------------------
+st.markdown("## 📊 ESG Benchmarking Analysis")
+
+if st.button("🚀 Run ESG Analysis", type="primary", use_container_width=True):
+    with st.spinner("📊 Analyzing ESG performance of Saudi Aramco, ExxonMobil, and BP..."):
+        df = get_company_data()
+        df_calc = calculate_esg_scores(df)
+        insights = generate_smart_insights(df_calc)
+        st.session_state.results = df_calc
+        st.session_state.insights = insights
+        st.session_state.analysis_done = True
+    st.success("✅ Analysis complete! Results displayed below.")
+    st.balloons()
+
+if st.session_state.get('analysis_done', False) and st.session_state.results is not None:
+    df_calc = st.session_state.results
+    insights = st.session_state.insights
+    
+    # 1. Winner Analysis
+    display_winner_analysis(df_calc)
+    
+    # 2. Company Cards
+    st.markdown("---")
+    display_company_cards(df_calc)
+    
+    # 3. Charts
+    st.markdown("---")
+    display_charts(df_calc)
+    
+    # 4. Detailed Comparison Table
+    st.markdown("---")
+    display_detailed_comparison(df_calc)
+    
+    # 5. Predictive Insights & Smart Insights
+    st.markdown("---")
+    display_predictive_insights(df_calc, insights)
+    
+    # 6. Export
+    st.markdown("---")
+    st.markdown("## 📥 Export Results")
+    
+    csv = df_calc.to_csv(index=False)
+    st.download_button(
+        label="📊 Download ESG Analysis as CSV",
+        data=csv,
+        file_name=f"ESG_Benchmarking_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+# -----------------------
+# FOOTER
+# -----------------------
+st.markdown("---")
+st.markdown("""
+    <div style='text-align: center; padding: 20px; background: linear-gradient(135deg, #0A2E0F 0%, #1B5E20 100%); border-radius: 15px; margin-top: 20px;'>
+        <p style='color: white;'>🏆 Global Energy ESG Benchmarking 2025 | Saudi Aramco · ExxonMobil · BP</p>
+        <p style='color: #E8F5E9; font-size: 12px;'>Developed by <strong>Ismail Kamal</strong> & Team | <strong style='color: #FF0000;'>Under Supervision of Dr. Mohamed Tash</strong></p>
+        <p style='color: #FFD54F; font-size: 11px;'>Version 10.0 | GRI · TCFD · SASB · SBTi Compliant</p>
+    </div>
+""", unsafe_allow_html=True)
